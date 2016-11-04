@@ -1,10 +1,11 @@
 {-# LANGUAGE Rank2Types, ConstraintKinds, KindSignatures, TypeFamilies, ScopedTypeVariables, MultiParamTypeClasses, AllowAmbiguousTypes
-           , FlexibleContexts, FlexibleInstances, UndecidableInstances, DataKinds, TypeApplications, DeriveGeneric #-}
+           , FlexibleContexts, FlexibleInstances, UndecidableInstances, DataKinds, TypeApplications, DeriveGeneric, DeriveDataTypeable #-}
 module Example where
 
 import GHC.Exts
 import Data.Maybe
 import GHC.Generics (Generic)
+import Data.Data (Data)
 import Control.Parallel.Strategies
 
 
@@ -78,11 +79,11 @@ test4 = applySelectiveM @DebugWhere debugWhereCs (return . debugSubtree) $ ABC (
 
 -------------------------------- REPRESENTATION-SPECIFIC PART
 
-data A = ABC B C deriving (Show, Generic)
-data B = B | BA A deriving (Show, Generic)
-data C = CB B | CD D deriving (Show, Generic)
-data D = DDE D E | D deriving (Show, Generic)
-data E = E deriving (Show, Generic)
+data A = ABC B C deriving (Show, Generic, Data)
+data B = B | BA A deriving (Show, Generic, Data)
+data C = CB B | CD D deriving (Show, Generic, Data)
+data D = DDE D E | D deriving (Show, Generic, Data)
+data E = E deriving (Show, Generic, Data)
 
 instance NFData A
 instance NFData B
@@ -162,13 +163,19 @@ class App (flag :: Bool) c b where
   appOpt :: (forall a . c a => a -> x) -> b -> Maybe x
 
 instance c b => App 'True c b where
+  {-# INLINE app #-}
   app f a = f a
+  {-# INLINE appM #-}
   appM f a = f a
+  {-# INLINE appOpt #-}
   appOpt f a = Just $ f a
 
 instance App 'False c b where
+  {-# INLINE app #-}
   app _ a = a
+  {-# INLINE appM #-}
   appM _ a = return a
+  {-# INLINE appOpt #-}
   appOpt _ _ = Nothing
 
 class App (AppSelector c b) c b => Apply c b where
@@ -178,12 +185,12 @@ class App (AppSelector c b) c b => Apply c b where
   applySelective :: (forall a . c a => a -> a) -> (forall a . c a => a -> Bool) -> b -> b
   applySelectiveM :: Monad m => (forall a . c a => a -> m a) -> (forall a . c a => a -> m Bool) -> b -> m b
 
-
 class MonoMatch a b where
   monoApp :: (a -> a) -> b -> b
 
 instance MonoMatch a a where
   monoApp = id
+  {-# INLINE monoApp #-}
 
 type instance AppSelector (MonoMatch a) b = TypEq a b
 
@@ -191,13 +198,14 @@ type family TypEq a b :: Bool where
   TypEq a a = 'True
   TypEq a b = 'False
 
-
 appIf :: forall c b . App (AppSelector c b) c b => (forall a . c a => a -> a) -> (forall a . c a => a -> Bool) -> b -> b -> b
+{-# INLINE appIf #-}
 appIf f pred val combined = app @(AppSelector c b) @c f $ case appOpt @(AppSelector c b) @c pred val of
     Just False -> val
     _          -> combined
 
 appIfM :: forall c b m . (App (AppSelector c b) c b, Monad m) => (forall a . c a => a -> m a) -> (forall a . c a => a -> m Bool) -> b -> m b -> m b
+{-# INLINE appIfM #-}
 appIfM f pred val combined = do
     doChildren <- fromMaybe (return True) $ appOpt @(AppSelector c b) @c pred val
     inner <- case doChildren of False -> return val
