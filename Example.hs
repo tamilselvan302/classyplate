@@ -1,14 +1,16 @@
 {-# LANGUAGE Rank2Types, ConstraintKinds, KindSignatures, TypeFamilies, ScopedTypeVariables, MultiParamTypeClasses, AllowAmbiguousTypes
-           , FlexibleContexts, FlexibleInstances, UndecidableInstances, DataKinds, TypeApplications #-}
+           , FlexibleContexts, FlexibleInstances, UndecidableInstances, DataKinds, TypeApplications, DeriveGeneric #-}
 module Example where
 
 import GHC.Exts
 import Data.Maybe
+import GHC.Generics (Generic)
+import Control.Parallel.Strategies
 
 
 -------------------------------- USAGE-SPECIFIC PART
 
-test = apply @F trf $ ABC (BA (ABC B C)) (CB B)
+test = apply @F trf $ ABC (BA (ABC B (CB B))) (CB B)
 
 class F a where
   trf :: a -> a
@@ -17,7 +19,7 @@ instance F B where
   trf b = B
 
 instance F C where
-  trf c = C
+  trf c = CB B
   
 type instance AppSelector F A = 'False
 type instance AppSelector F B = 'True
@@ -28,7 +30,7 @@ type instance AppSelector F E = 'False
 
 --------
 
-test2 = applyM @Debug debugCs $ ABC (BA (ABC B C)) (CB B)
+test2 = applyM @Debug debugCs $ ABC (BA (ABC B (CB B))) (CB B)
 
 class Debug a where
   debugCs :: a -> IO a
@@ -44,7 +46,7 @@ type family DebugSelector t where
 
 --------
 
-test3 = apply @(MonoMatch C) (monoApp (\c -> case c of CB b -> CB B; C -> CB B)) $ ABC (BA (ABC B C)) (CB B)
+test3 = apply @(MonoMatch C) (monoApp (\c -> case c of CB b -> CB (BA (ABC b (CB B))); )) $ ABC (BA (ABC B (CB B))) (CB B)
 
 -------
 
@@ -71,16 +73,22 @@ type family DebugWhereSelector t where
   DebugWhereSelector E = 'True
   DebugWhereSelector _ = 'False
 
-test4 = applySelectiveM @DebugWhere debugWhereCs (return . debugSubtree) $ ABC (BA (ABC B C)) (CD (DDE D E))
+test4 = applySelectiveM @DebugWhere debugWhereCs (return . debugSubtree) $ ABC (BA (ABC B (CB B))) (CD (DDE D E))
 
 
 -------------------------------- REPRESENTATION-SPECIFIC PART
 
-data A = ABC B C deriving Show
-data B = B | BA A deriving Show
-data C = C | CB B | CD D deriving Show
-data D = DDE D E | D deriving Show
-data E = E deriving Show
+data A = ABC B C deriving (Show, Generic)
+data B = B | BA A deriving (Show, Generic)
+data C = CB B | CD D deriving (Show, Generic)
+data D = DDE D E | D deriving (Show, Generic)
+data E = E deriving (Show, Generic)
+
+instance NFData A
+instance NFData B
+instance NFData C
+instance NFData D
+instance NFData E
 
 
 type GoodOperation c = (App (AppSelector c A) c A, App (AppSelector c B) c B, App (AppSelector c C) c C, App (AppSelector c D) c D, App (AppSelector c E) c E)
@@ -106,19 +114,19 @@ instance GoodOperation c => Apply c B where
 
 
 instance GoodOperation c => Apply c C where
-  apply f C = app @(AppSelector c C) @c f C
+  -- apply f C = app @(AppSelector c C) @c f C
   apply f (CB b) = app @(AppSelector c C) @c f $ CB (apply @c f b)
   apply f (CD d) = app @(AppSelector c C) @c f $ CD (apply @c f d)
 
-  applyM f C = appM @(AppSelector c C) @c f C
+  -- applyM f C = appM @(AppSelector c C) @c f C
   applyM f (CB b) = appM @(AppSelector c C) @c f =<< (CB <$> applyM @c f b)
   applyM f (CD d) = appM @(AppSelector c C) @c f =<< (CD <$> applyM @c f d)
 
-  applySelective f pred val@C = appIf @c f pred val C
+  -- applySelective f pred val@C = appIf @c f pred val C
   applySelective f pred val@(CB b) = appIf @c f pred val (CB (applySelective @c f pred b))
   applySelective f pred val@(CD d) = appIf @c f pred val (CD (applySelective @c f pred d))
 
-  applySelectiveM f pred val@C = appIfM @c f pred val (return C)
+  -- applySelectiveM f pred val@C = appIfM @c f pred val (return C)
   applySelectiveM f pred val@(CB b) = appIfM @c f pred val (CB <$> applySelectiveM @c f pred b)
   applySelectiveM f pred val@(CD d) = appIfM @c f pred val (CD <$> applySelectiveM @c f pred d)
 
