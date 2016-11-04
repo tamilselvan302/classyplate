@@ -1,4 +1,4 @@
-{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE MultiParamTypeClasses, FlexibleContexts #-}
 module DirectUni where
 
 import Data.Generics.Uniplate.Operations
@@ -122,5 +122,6 @@ instance Biplate E E where
     biplate = plateSelf
 
 
-directUni d = transformBi testFun (generateA d)
+directUni1 d = transformBi testFun1 (generateA d)
+directUni2 d = transformBi testFun2 (generateA d)
 

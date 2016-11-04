@@ -5,5 +5,6 @@ import Data.Generics.Uniplate.Data
 
 import Generate
 
-autoUni d = transformBi testFun (generateA d)
+autoUni1 d = transformBi testFun1 (generateA d)
+autoUni2 d = transformBi testFun2 (generateA d)
 

@@ -32,8 +32,8 @@ sizeD (DDE d e) = 1 + sizeD d + 1
 ---
 
 
-testFun D = DDE D E
-testFun d = d
+testFun1 D = DDE D E
+testFun1 d = d
 
--- testFun (CB b) = CB (BA (ABC b (CB B)))
--- testFun c = c
+testFun2 (CB b) = CB (BA (ABC b (CB B)))
+testFun2 c = c

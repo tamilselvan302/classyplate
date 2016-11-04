@@ -1,21 +1,23 @@
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE TypeApplications, FlexibleContexts #-}
 
 module Main where
 
 import Example
 
-import DirectUni (directUni)
-import AutoUni (autoUni)
+import DirectUni (directUni1, directUni2)
+import AutoUni (autoUni1, autoUni2)
 
 import Generate
 
 import Criterion.Main
 
-our d = apply @(MonoMatch D) (monoApp testFun) (generateA d)
+-- TODO: try specialize pragma
+-- TODO: try with ifTrue
 
-cond d = applySelective @(MonoMatch D) (monoApp testFun) (const True) (generateA d)
-
--- our d = apply @(MonoMatch C) (monoApp testFun) (generateA d)
+our1 d = apply_ @(MonoMatch D) (monoApp testFun1) (generateA d)
+our2 d = apply_ @(MonoMatch C) (monoApp testFun2) (generateA d)
+cond1 d = applySelective_ @(MonoMatch D) (monoApp testFun1) (const True) (generateA d)
+cond2 d = applySelective_ @(MonoMatch C) (monoApp testFun2) (const True) (generateA d)
 
 -- uniplate d = 
 
@@ -29,23 +31,43 @@ main = defaultMain
     , bench "141" $ nf generateA 141
     ]
   , bgroup "our"
-    [ bench "61" $ nf our 61
-    , bench "101" $ nf our 101
-    , bench "141" $ nf our 141
+    [ bgroup "deep" 
+        [ bench "61" $ nf our1 61
+        , bench "101" $ nf our1 101
+        , bench "141" $ nf our1 141]
+    , bgroup "shallow" 
+        [ bench "61" $ nf our2 61
+        , bench "101" $ nf our2 101
+        , bench "141" $ nf our2 141]
     ]
   , bgroup "conditional"
-    [ bench "61" $ nf cond 61
-    , bench "101" $ nf cond 101
-    , bench "141" $ nf cond 141
+    [ bgroup "deep" 
+        [ bench "61" $ nf cond1 61
+        , bench "101" $ nf cond1 101
+        , bench "141" $ nf cond1 141]
+    , bgroup "shallow" 
+        [ bench "61" $ nf cond2 61
+        , bench "101" $ nf cond2 101
+        , bench "141" $ nf cond2 141]
     ]
   , bgroup "autoUni" 
-    [ bench "61" $ nf autoUni 61
-    , bench "101" $ nf autoUni 101
-    , bench "141" $ nf autoUni 141
+    [ bgroup "deep" 
+        [ bench "61" $ nf autoUni1 61
+        , bench "101" $ nf autoUni1 101
+        , bench "141" $ nf autoUni1 141]
+    , bgroup "shallow" 
+        [ bench "61" $ nf autoUni2 61
+        , bench "101" $ nf autoUni2 101
+        , bench "141" $ nf autoUni2 141]
     ]
   , bgroup "directUni" 
-    [ bench "61" $ nf directUni 61
-    , bench "101" $ nf directUni 101
-    , bench "141" $ nf directUni 141
+    [ bgroup "deep" 
+        [ bench "61" $ nf directUni1 61
+        , bench "101" $ nf directUni1 101
+        , bench "141" $ nf directUni1 141]
+    , bgroup "shallow" 
+        [ bench "61" $ nf directUni2 61
+        , bench "101" $ nf directUni2 101
+        , bench "141" $ nf directUni2 141]
     ]
   ]
