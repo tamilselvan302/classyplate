@@ -115,19 +115,15 @@ instance GoodOperation c => Apply c B where
 
 
 instance GoodOperation c => Apply c C where
-  -- apply f C = app @(AppSelector c C) @c f C
   apply f (CB b) = app @(AppSelector c C) @c f $ CB (apply @c f b)
   apply f (CD d) = app @(AppSelector c C) @c f $ CD (apply @c f d)
 
-  -- applyM f C = appM @(AppSelector c C) @c f C
   applyM f (CB b) = appM @(AppSelector c C) @c f =<< (CB <$> applyM @c f b)
   applyM f (CD d) = appM @(AppSelector c C) @c f =<< (CD <$> applyM @c f d)
 
-  -- applySelective f pred val@C = appIf @c f pred val C
   applySelective f pred val@(CB b) = appIf @c f pred val (CB (applySelective @c f pred b))
   applySelective f pred val@(CD d) = appIf @c f pred val (CD (applySelective @c f pred d))
 
-  -- applySelectiveM f pred val@C = appIfM @c f pred val (return C)
   applySelectiveM f pred val@(CB b) = appIfM @c f pred val (CB <$> applySelectiveM @c f pred b)
   applySelectiveM f pred val@(CD d) = appIfM @c f pred val (CD <$> applySelectiveM @c f pred d)
 
