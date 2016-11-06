@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeApplications, FlexibleContexts #-}
+{-# LANGUAGE TypeApplications, FlexibleContexts, RankNTypes, DataKinds, LambdaCase #-}
 
 module Main where
 
@@ -11,13 +11,12 @@ import Generate
 
 import Criterion.Main
 
--- TODO: try specialize pragma
--- TODO: try with ifTrue
-
-our1 d = apply_ @(MonoMatch D) (monoApp testFun1) (generateA d)
-our2 d = apply_ @(MonoMatch C) (monoApp testFun2) (generateA d)
-cond1 d = applySelective_ @(MonoMatch D) (monoApp testFun1) (const True) (generateA d)
-cond2 d = applySelective_ @(MonoMatch C) (monoApp testFun2) (const True) (generateA d)
+our1 d = apply @(MonoMatch D) (monoApp testFun1) (generateA d)
+our2 d = apply @(MonoMatch C) (monoApp testFun2) (generateA d)
+auto1 d = applyAuto_ @(MonoMatch D) (monoApp testFun1) (generateA d)
+auto2 d = applyAuto_ @(MonoMatch C) (monoApp testFun2) (generateA d)
+cond1 d = applySelective @(MonoMatch D) (monoApp testFun1) (const True) (generateA d)
+cond2 d = applySelective @(MonoMatch C) (monoApp testFun2) (const True) (generateA d)
 
 -- uniplate d = 
 
@@ -39,6 +38,16 @@ main = defaultMain
         [ bench "61" $ nf our2 61
         , bench "101" $ nf our2 101
         , bench "141" $ nf our2 141]
+    ]
+  , bgroup "auto"
+    [ bgroup "deep" 
+        [ bench "61" $ nf auto1 61
+        , bench "101" $ nf auto1 101
+        , bench "141" $ nf auto1 141]
+    , bgroup "shallow" 
+        [ bench "61" $ nf auto2 61
+        , bench "101" $ nf auto2 101
+        , bench "141" $ nf auto2 141]
     ]
   , bgroup "conditional"
     [ bgroup "deep" 
