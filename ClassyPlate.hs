@@ -130,16 +130,18 @@ type family TypEq a b :: Bool where
   TypEq a a = 'True
   TypEq a b = 'False
 
-appIf :: forall c b . App (AppSelector c b) c b => (forall a . c a => a -> a) -> (forall a . c a => a -> Bool) -> b -> b -> b
+appIf :: forall c b . App (AppSelector c b) c b => ClsToken c -> (forall a . c a => a -> a) -> (forall a . c a => a -> Bool) -> b -> b -> b
 {-# INLINE appIf #-}
-appIf f pred val combined = app (undefined :: FlagToken (AppSelector c b)) (undefined :: ClsToken c) f $ case appOpt (undefined :: FlagToken (AppSelector c b)) (undefined :: ClsToken c) pred val of
+appIf t f pred val combined = app flTok t f $ case appOpt flTok t pred val of
     Just False -> val
     _          -> combined
+  where flTok = undefined :: FlagToken (AppSelector c b)
 
-appIfM :: forall c b m . (App (AppSelector c b) c b, Monad m) => (forall a . c a => a -> m a) -> (forall a . c a => a -> m Bool) -> b -> m b -> m b
+appIfM :: forall c b m . (App (AppSelector c b) c b, Monad m) => ClsToken c -> (forall a . c a => a -> m a) -> (forall a . c a => a -> m Bool) -> b -> m b -> m b
 {-# INLINE appIfM #-}
-appIfM f pred val combined = do
-    doChildren <- fromMaybe (return True) $ appOpt (undefined :: FlagToken (AppSelector c b)) (undefined :: ClsToken c) pred val
+appIfM t f pred val combined = do
+    doChildren <- fromMaybe (return True) $ appOpt flTok t pred val
     inner <- case doChildren of False -> return val
                                 _     -> combined
-    appM (undefined :: FlagToken (AppSelector c b)) (undefined :: ClsToken c) f inner
+    appM flTok t f inner
+  where flTok = undefined :: FlagToken (AppSelector c b)

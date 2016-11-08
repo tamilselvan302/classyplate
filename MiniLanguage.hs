@@ -49,6 +49,13 @@ data Ann elem dom stage
         , _element    :: elem dom stage -- ^ The original AST part
         }
 
+instance Show (elem dom stage) => Show (Ann elem dom stage) where
+    show = show . _element
 
-data Expr dom stage = Add (Ann Name dom stage) (Ann Name dom stage)
-data Name dom stage = Name
+
+data Expr dom stage = Add (Ann Expr dom stage) (Ann Expr dom stage)
+                    | Var (Ann Name dom stage)
+   deriving Show
+   
+data Name dom stage = Name 
+  deriving Show
