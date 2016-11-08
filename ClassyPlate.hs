@@ -27,6 +27,8 @@ import Control.Parallel.Strategies
 import Data.Type.Bool
 import Data.Type.List hiding (Distinct)
 
+-- type GoodOperationFor c e = (App (AppSelector c e) c e, AutoApply c (ClassIgnoresSubtree c e) e)
+type GoodOperationFor c e = (App (AppSelector c e) c e)
 
 type family ClassIgnoresSubtree (cls :: * -> Constraint) (typ :: *) :: Bool where
   ClassIgnoresSubtree cls typ = Distinct (SelectedElements cls) (MemberTypes typ)
@@ -64,50 +66,53 @@ type family SelectedElements (c :: * -> Constraint) :: [*]
 
 type family AppSelector (c :: * -> Constraint) (a :: *) :: Bool
 
+data family ClsToken (c :: * -> Constraint) :: *
+data family FlagToken (c :: Bool) :: *
+
 class App (flag :: Bool) c b where
-  app :: (forall a . c a => a -> a) -> b -> b
-  appM :: Monad m => (forall a . c a => a -> m a) -> b -> m b
-  appOpt :: (forall a . c a => a -> x) -> b -> Maybe x
+  app :: FlagToken flag -> ClsToken c -> (forall a . c a => a -> a) -> b -> b
+  appM :: Monad m => FlagToken flag -> ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
+  appOpt :: FlagToken flag -> ClsToken c -> (forall a . c a => a -> x) -> b -> Maybe x
 
 instance c b => App 'True c b where
   {-# INLINE app #-}
-  app f a = f a
+  app _ _ f a = f a
   {-# INLINE appM #-}
-  appM f a = f a
+  appM _ _ f a = f a
   {-# INLINE appOpt #-}
-  appOpt f a = Just $ f a
+  appOpt _ _ f a = Just $ f a
 
 instance App 'False c b where
   {-# INLINE app #-}
-  app _ a = a
+  app _ _ _ a = a
   {-# INLINE appM #-}
-  appM _ a = return a
+  appM _ _ _ a = return a
   {-# INLINE appOpt #-}
-  appOpt _ _ = Nothing
+  appOpt _ _ _ _ = Nothing
 
 class App (AppSelector c b) c b => Apply c b where
-  apply :: (forall a . c a => a -> a) -> b -> b
-  applyM :: Monad m => (forall a . c a => a -> m a) -> b -> m b
+  apply :: ClsToken c -> (forall a . c a => a -> a) -> b -> b
+  applyM :: Monad m => ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
 
-  applySelective :: (forall a . c a => a -> a) -> (forall a . c a => a -> Bool) -> b -> b
-  applySelectiveM :: Monad m => (forall a . c a => a -> m a) -> (forall a . c a => a -> m Bool) -> b -> m b
+  applySelective :: ClsToken c -> (forall a . c a => a -> a) -> (forall a . c a => a -> Bool) -> b -> b
+  applySelectiveM :: Monad m => ClsToken c -> (forall a . c a => a -> m a) -> (forall a . c a => a -> m Bool) -> b -> m b
 
 class App (AppSelector c b) c b => AutoApply c (sel :: Bool) b where
-  applyAuto :: (forall a . c a => a -> a) -> b -> b
-  applyAutoM :: Monad m => (forall a . c a => a -> m a) -> b -> m b
+  applyAuto :: ClsToken c -> (forall a . c a => a -> a) -> b -> b
+  applyAutoM :: Monad m => ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
 
 applyAuto_ :: forall c b . AutoApply c (ClassIgnoresSubtree c b) b => (forall a . c a => a -> a) -> b -> b
 {-# INLINE applyAuto_ #-}
-applyAuto_ = applyAuto @c @(ClassIgnoresSubtree c b)
+applyAuto_ = applyAuto @c @(ClassIgnoresSubtree c b) (undefined :: ClsToken c)
 
 applyAutoM_ :: forall c b m . (AutoApply c (ClassIgnoresSubtree c b) b, Monad m) => (forall a . c a => a -> m a) -> b -> m b
 {-# INLINE applyAutoM_ #-}
-applyAutoM_ = applyAutoM @c @(ClassIgnoresSubtree c b)
+applyAutoM_ = applyAutoM @c @(ClassIgnoresSubtree c b) (undefined :: ClsToken c)
 
 instance App (AppSelector c b) c b => AutoApply c True b where
-  applyAuto f a = app @(AppSelector c b) @c f a
+  applyAuto t f a = app (undefined :: FlagToken (AppSelector c b)) t f a
   {-# INLINE applyAuto #-}
-  applyAutoM f a = appM @(AppSelector c b) @c f a
+  applyAutoM t f a = appM (undefined :: FlagToken (AppSelector c b)) t f a
   {-# INLINE applyAutoM #-}
 
 {-# SPECIALIZE INLINE apply :: Apply (MonoMatch x) sel b => (forall a . MonoMatch x a => a -> a) -> b -> b #-}
@@ -127,14 +132,14 @@ type family TypEq a b :: Bool where
 
 appIf :: forall c b . App (AppSelector c b) c b => (forall a . c a => a -> a) -> (forall a . c a => a -> Bool) -> b -> b -> b
 {-# INLINE appIf #-}
-appIf f pred val combined = app @(AppSelector c b) @c f $ case appOpt @(AppSelector c b) @c pred val of
+appIf f pred val combined = app (undefined :: FlagToken (AppSelector c b)) (undefined :: ClsToken c) f $ case appOpt (undefined :: FlagToken (AppSelector c b)) (undefined :: ClsToken c) pred val of
     Just False -> val
     _          -> combined
 
 appIfM :: forall c b m . (App (AppSelector c b) c b, Monad m) => (forall a . c a => a -> m a) -> (forall a . c a => a -> m Bool) -> b -> m b -> m b
 {-# INLINE appIfM #-}
 appIfM f pred val combined = do
-    doChildren <- fromMaybe (return True) $ appOpt @(AppSelector c b) @c pred val
+    doChildren <- fromMaybe (return True) $ appOpt (undefined :: FlagToken (AppSelector c b)) (undefined :: ClsToken c) pred val
     inner <- case doChildren of False -> return val
                                 _     -> combined
-    appM @(AppSelector c b) @c f inner
+    appM (undefined :: FlagToken (AppSelector c b)) (undefined :: ClsToken c) f inner
