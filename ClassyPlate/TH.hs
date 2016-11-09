@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskellQuotes #-} 
-module TH (makeClassyPlate) where
+module ClassyPlate.TH (makeClassyPlate) where
 
 import Data.Maybe
 import Control.Monad
@@ -7,8 +7,8 @@ import Control.Applicative
 
 import Language.Haskell.TH
 
-import ClassyPlate
-import TypePrune
+import ClassyPlate.Core
+import ClassyPlate.TypePrune
 
 -- TODO: make the definitions inlineable, and try speed gains by inlining
 

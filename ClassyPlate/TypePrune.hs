@@ -5,12 +5,12 @@
            , TypeFamilies
            , UndecidableInstances
            #-}
-module TypePrune (ClassIgnoresSubtree, AppSelector, IgnoredFields) where
+module ClassyPlate.TypePrune (ClassIgnoresSubtree, AppSelector, IgnoredFields) where
 
 import GHC.Exts (Constraint)
 import GHC.Generics
 import Data.Type.Bool
-import Data.Type.List hiding (Distinct)
+import Data.Type.List
 import GHC.TypeLits (Symbol)
 
 -- | This type decides if the subtree of an element cannot contain an element that is transformed.
@@ -30,11 +30,6 @@ type family IgnoredFields (t :: *) :: [Symbol]
 type family AnySelected (c :: * -> Constraint) (ls :: [*]) :: Bool where
   AnySelected c (fst ': rest) = AppSelector c fst || AnySelected c rest
   AnySelected c '[] = False
-
-type family Distinct (ls1 :: [k]) (ls2 :: [k]) :: Bool where
-  Distinct '[] ls2 = True
-  Distinct ls1 '[] = True
-  Distinct (e1 ': ls1) ls2 = Not (Find e1 ls2) && Distinct ls1 ls2
 
 type family MemberTypes (typ :: *) :: [*] where
   MemberTypes t = GetMemberTypes '[] t
