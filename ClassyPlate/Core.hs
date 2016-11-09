@@ -57,9 +57,9 @@ instance c b => App 'True c b where
   {-# INLINE appM #-}
   appM _ _ f a = f a
   {-# INLINE appPred #-}
-  appPred _ _ f th el = if f th then th else el
+  appPred _ _ f th el = if f th then el else th
   {-# INLINE appPredM #-}
-  appPredM _ _ f th el = f th >>= \p -> if p then return th else el
+  appPredM _ _ f th el = f th >>= \p -> if p then el else return th
 
 instance App 'False c b where
   {-# INLINE app #-}
