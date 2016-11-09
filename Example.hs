@@ -21,7 +21,7 @@ import TH
 -------------------------------- USAGE-SPECIFIC PART
 
 test :: A
-test = apply @F undefined trf $ ABC (BA (ABC B (CB B))) (CB B)
+test = classyTraverse @F trf $ ABC (BA (ABC B (CB B))) (CB B)
 
 class F a where
   trf :: a -> a
@@ -40,7 +40,7 @@ type instance AppSelector F E = 'False
 
 --------
 
-test2 = applyM @Debug undefined debugCs $ ABC (BA (ABC B (CB B))) (CD D)
+test2 = classyTraverseM @Debug debugCs $ ABC (BA (ABC B (CB B))) (CD D)
 
 class Debug a where
   debugCs :: a -> IO a
@@ -57,7 +57,7 @@ type family DebugSelector t where
 --------
 
 test3 :: A
-test3 = apply @(MonoMatch C) undefined (monoApp (\c -> case c of CB b -> CB (BA (ABC b (CB B))); CD d -> CD D)) $ ABC (BA (ABC B (CB B))) (CB B)
+test3 = classyTraverse @(MonoMatch C) (monoApp (\c -> case c of CB b -> CB (BA (ABC b (CB B))); CD d -> CD D)) $ ABC (BA (ABC B (CB B))) (CB B)
 
 -------
 
@@ -84,7 +84,7 @@ type family DebugWhereSelector t where
   DebugWhereSelector E = 'True
   DebugWhereSelector _ = 'False
 
-test4 = applySelectiveM @DebugWhere undefined debugWhereCs (return . debugSubtree) $ ABC (BA (ABC B (CB B))) (CD (DDE D E))
+test4 = selectiveTraverseM @DebugWhere debugWhereCs (return . debugSubtree) $ ABC (BA (ABC B (CB B))) (CD (DDE D E))
 
 
 -------------------------------- REPRESENTATION-SPECIFIC PART

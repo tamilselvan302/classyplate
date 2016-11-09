@@ -6,8 +6,8 @@ import GHC.Generics
 -- * Semantic info
 
 data Dom deriving Generic
-data NameInfo = NameInfo deriving Generic
-data NoInfo = NoInfo deriving Generic
+data NameInfo = NameInfo
+data NoInfo = NoInfo
 
 
 type SemanticInfo (domain :: *) (node :: * -> * -> *) = SemanticInfo' domain (SemaInfoClassify node)
@@ -34,16 +34,16 @@ class SourceInfo stage where
   data OptionalInfo stage :: *
 
 instance SourceInfo RangeStage where
-  data SpanInfo RangeStage = NodeSpan deriving Generic
-  data ListInfo RangeStage = ListPos deriving Generic
-  data OptionalInfo RangeStage = OptionalPos deriving Generic
+  data SpanInfo RangeStage = NodeSpan
+  data ListInfo RangeStage = ListPos
+  data OptionalInfo RangeStage = OptionalPos
 
 -- * Nodes
 
 data NodeInfo sema src 
   = NodeInfo { _semanticInfo :: sema
              , _sourceInfo :: src
-             } deriving Generic
+             }
 
 data Ann elem dom stage
   = Ann { _annotation :: NodeInfo (SemanticInfo dom elem) (SpanInfo stage)

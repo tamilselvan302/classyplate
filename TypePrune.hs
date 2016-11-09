@@ -5,12 +5,13 @@
            , TypeFamilies
            , UndecidableInstances
            #-}
-module TypePrune (ClassIgnoresSubtree, AppSelector) where
+module TypePrune (ClassIgnoresSubtree, AppSelector, IgnoredFields) where
 
 import GHC.Exts (Constraint)
 import GHC.Generics
 import Data.Type.Bool
 import Data.Type.List hiding (Distinct)
+import GHC.TypeLits (Symbol)
 
 -- | This type decides if the subtree of an element cannot contain an element that is transformed.
 type family ClassIgnoresSubtree (cls :: * -> Constraint) (typ :: *) :: Bool where
@@ -21,6 +22,10 @@ type family ClassIgnoresSubtree (cls :: * -> Constraint) (typ :: *) :: Bool wher
 -- a total type function for a given class, at least for all the types that can possibly
 -- accessed.
 type family AppSelector (c :: * -> Constraint) (a :: *) :: Bool
+
+-- | This type family sets which fields should not be traversed when trying to generate
+-- automatically pruned versions of classy traversal.
+type family IgnoredFields (t :: *) :: [Symbol]
 
 type family AnySelected (c :: * -> Constraint) (ls :: [*]) :: Bool where
   AnySelected c (fst ': rest) = AppSelector c fst || AnySelected c rest
@@ -40,19 +45,21 @@ type family GetMemberTypes (checked :: [*]) (typ :: *) :: [*] where
   GetMemberTypes checked Int = '[Int]
   GetMemberTypes checked Float = '[Float]
   GetMemberTypes checked Double = '[Double]
-  GetMemberTypes checked t = GetElementTypes checked (Rep t)
+  GetMemberTypes checked t = GetElementTypes t checked (Rep t)
 
-type family GetElementTypes (checked :: [*]) (typ :: * -> *) :: [*] where 
-  GetElementTypes checked (D1 md cons) = GetElementTypesCons checked cons
+type family GetElementTypes (t :: *) (checked :: [*]) (typ :: * -> *) :: [*] where 
+  GetElementTypes t checked (D1 md cons) = GetElementTypesCons t checked cons
 
-type family GetElementTypesCons (checked :: [*]) (typ :: * -> *) where 
-  GetElementTypesCons checked (C1 mc flds) = GetElementTypesFields checked flds
-  GetElementTypesCons checked (c1 :+: c2) = GetElementTypesCons checked c1 `Union` GetElementTypesCons checked c2
+type family GetElementTypesCons (t :: *) (checked :: [*]) (typ :: * -> *) where 
+  GetElementTypesCons t checked (C1 mc flds) = GetElementTypesFields t checked flds
+  GetElementTypesCons t checked (c1 :+: c2) = GetElementTypesCons t checked c1 `Union` GetElementTypesCons t checked c2
 
-type family GetElementTypesFields (checked :: [*]) (typ :: * -> *) where 
-  GetElementTypesFields checked (fld1 :*: fld2) = GetElementTypesFields checked fld1 `Union` GetElementTypesFields checked fld2
-  GetElementTypesFields checked (S1 ms (Rec0 t)) = GetElementTypesField checked (Find t checked) t
-  GetElementTypesFields checked U1 = '[]
+type family GetElementTypesFields (t :: *) (checked :: [*]) (typ :: * -> *) where 
+  GetElementTypesFields t checked (fld1 :*: fld2) = GetElementTypesFields t checked fld1 `Union` GetElementTypesFields t checked fld2
+  GetElementTypesFields t checked (S1 (MetaSel (Just fld) unp str laz) (Rec0 innerT)) 
+    = If (Find fld (IgnoredFields t)) '[] (GetElementTypesField checked (Find innerT checked) innerT)
+  GetElementTypesFields t checked (S1 ms (Rec0 innerT)) = GetElementTypesField checked (Find innerT checked) innerT
+  GetElementTypesFields t checked U1 = '[]
 
 type family GetElementTypesField (checked :: [*]) (inChecked :: Bool) (typ :: *) where 
   GetElementTypesField checked True typ = '[]

@@ -13,12 +13,12 @@ import Generate
 
 import Criterion.Main
 
-our1 d = apply @(MonoMatch D) undefined (monoApp testFun1) (generateA d)
-our2 d = apply @(MonoMatch C) undefined (monoApp testFun2) (generateA d)
-auto1 d = applyAuto_ @(MonoMatch D) (monoApp testFun1) (generateA d)
-auto2 d = applyAuto_ @(MonoMatch C) (monoApp testFun2) (generateA d)
-cond1 d = applySelective @(MonoMatch D) undefined (monoApp testFun1) (const True) (generateA d)
-cond2 d = applySelective @(MonoMatch C) undefined (monoApp testFun2) (const True) (generateA d)
+our1 d = classyTraverse @(MonoMatch D) (monoApp testFun1) (generateA d)
+our2 d = classyTraverse @(MonoMatch C) (monoApp testFun2) (generateA d)
+auto1 d = smartTraverse @(MonoMatch D) (monoApp testFun1) (generateA d)
+auto2 d = smartTraverse @(MonoMatch C) (monoApp testFun2) (generateA d)
+cond1 d = selectiveTraverse @(MonoMatch D) (monoApp testFun1) (const True) (generateA d)
+cond2 d = selectiveTraverse @(MonoMatch C) (monoApp testFun2) (const True) (generateA d)
 
 -- uniplate d = 
 

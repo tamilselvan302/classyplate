@@ -1,6 +1,13 @@
-{-# LANGUAGE Rank2Types, ConstraintKinds, KindSignatures, TypeFamilies, ScopedTypeVariables, MultiParamTypeClasses, AllowAmbiguousTypes
-           , FlexibleContexts, FlexibleInstances, UndecidableInstances, DataKinds, TypeApplications, DeriveGeneric, DeriveDataTypeable
-           , TypeOperators, PolyKinds, ScopedTypeVariables, TemplateHaskell, RankNTypes #-}
+{-# LANGUAGE TemplateHaskell
+           , DataKinds
+           , TypeApplications
+           , TypeFamilies
+           , FlexibleInstances
+           , MultiParamTypeClasses
+           , FlexibleContexts
+           , UndecidableInstances
+           , ScopedTypeVariables 
+           #-}
 module MiniLangExample where
 
 import GHC.Exts
@@ -40,13 +47,12 @@ type family TransformAppSelector x where
   TransformAppSelector (Ann e dom stage) = True
   TransformAppSelector x = False
 
-test = apply (undefined :: ClsToken Transform) trf $ testExpr
-test2 = applyAuto_ @Transform trf $ testExpr
+test = classyTraverse @Transform trf $ testExpr
+test2 = smartTraverse @Transform trf $ testExpr
 
 makeClassyPlate [ '_annotation ] ''Ann
 makeClassyPlate [] ''Expr
 makeClassyPlate [] ''Name
-
 
 -- $( do pl <- makeClassyPlate [ '_annotation ] ''Ann
 --       runIO $ putStrLn $ pprint pl

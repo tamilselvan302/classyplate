@@ -25,10 +25,11 @@ import Control.Parallel.Strategies
 
 import TypePrune
 
+-- TODO: extract ClassPlate.Gen for generation of ClassyPlates
 -- FIXME: when TH supports type application we can remove the token parameters
 
-type GoodOperationForAuto c e = (GoodOperationFor c e, Generic e)
 type GoodOperationFor c e = (App (AppSelector c e) c e)
+type GoodOperationForAuto c e = (GoodOperationFor c e, Generic e)
 
 data ClsToken (c :: * -> Constraint)
 data FlagToken (c :: Bool)
@@ -55,34 +56,61 @@ instance App 'False c b where
   {-# INLINE appOpt #-}
   appOpt _ _ _ _ = Nothing
 
+-- | A class for traversals that use a polymorphic function to visit all applicable elements.
 class GoodOperationFor c b => ClassyPlate c b where
-  apply :: ClsToken c -> (forall a . c a => a -> a) -> b -> b
-  applyM :: Monad m => ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
+  classyTraverse_ :: ClsToken c -> (forall a . c a => a -> a) -> b -> b
+  classyTraverseM_ :: Monad m => ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
 
-  applySelective :: ClsToken c -> (forall a . c a => a -> a) -> (forall a . c a => a -> Bool) -> b -> b
-  applySelectiveM :: Monad m => ClsToken c -> (forall a . c a => a -> m a) -> (forall a . c a => a -> m Bool) -> b -> m b
+  selectiveTraverse_ :: ClsToken c -> (forall a . c a => a -> a) -> (forall a . c a => a -> Bool) -> b -> b
+  selectiveTraverseM_ :: Monad m => ClsToken c -> (forall a . c a => a -> m a) -> (forall a . c a => a -> m Bool) -> b -> m b
 
-class (GoodOperationForAuto c b) => AutoApply c (sel :: Bool) b where
-  applyAuto :: FlagToken sel -> ClsToken c -> (forall a . c a => a -> a) -> b -> b
-  applyAutoM :: Monad m => FlagToken sel -> ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
+-- | A class for traversals that use a polymorphic function to visit all applicable elements but only visit the 
+-- parts where the applicable elements could be found.
+class (GoodOperationForAuto c b) => SmartClassyPlate c (sel :: Bool) b where
+  smartTraverse_ :: FlagToken sel -> ClsToken c -> (forall a . c a => a -> a) -> b -> b
+  smartTraverseM_ :: Monad m => FlagToken sel -> ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
 
-applyAuto_ :: forall c b . AutoApply c (ClassIgnoresSubtree c b) b => (forall a . c a => a -> a) -> b -> b
-{-# INLINE applyAuto_ #-}
-applyAuto_ = applyAuto (undefined :: FlagToken (ClassIgnoresSubtree c b)) (undefined :: ClsToken c)
+-- | Traverse the data structure with a polymorphic function.
+classyTraverse :: forall c b . ClassyPlate c b => (forall a . c a => a -> a) -> b -> b
+{-# INLINE classyTraverse #-}
+classyTraverse = classyTraverse_ (undefined :: ClsToken c)
 
-applyAutoM_ :: forall c b m . (AutoApply c (ClassIgnoresSubtree c b) b, Monad m) => (forall a . c a => a -> m a) -> b -> m b
-{-# INLINE applyAutoM_ #-}
-applyAutoM_ = applyAutoM (undefined :: FlagToken (ClassIgnoresSubtree c b)) (undefined :: ClsToken c)
+-- | Traverse the data structure with a polymorphic monadic function.
+classyTraverseM :: forall c b m . (ClassyPlate c b, Monad m) => (forall a . c a => a -> m a) -> b -> m b
+{-# INLINE classyTraverseM #-}
+classyTraverseM = classyTraverseM_ (undefined :: ClsToken c)
 
-instance (GoodOperationForAuto c b) => AutoApply c True b where
-  applyAuto _ t f a = app (undefined :: FlagToken (AppSelector c b)) t f a
-  {-# INLINE applyAuto #-}
-  applyAutoM _ t f a = appM (undefined :: FlagToken (AppSelector c b)) t f a
-  {-# INLINE applyAutoM #-}
+-- | Traverse only those parts that are selected by the given selector function. 
+selectiveTraverse :: forall c b . ClassyPlate c b => (forall a . c a => a -> a) -> (forall a . c a => a -> Bool) -> b -> b
+{-# INLINE selectiveTraverse #-}
+selectiveTraverse = selectiveTraverse_ (undefined :: ClsToken c)
 
-{-# SPECIALIZE INLINE apply :: ClassyPlate (MonoMatch x) sel b => (forall a . MonoMatch x a => a -> a) -> b -> b #-}
+-- | Traverse only those parts that are selected by the given monadic selector function.
+selectiveTraverseM :: forall c b m . (ClassyPlate c b, Monad m) => (forall a . c a => a -> m a) -> (forall a . c a => a -> m Bool) -> b -> m b
+{-# INLINE selectiveTraverseM #-}
+selectiveTraverseM = selectiveTraverseM_ (undefined :: ClsToken c)
 
+-- | Traverse only those parts of the data structure that could possibly contain elements that the given function can be applied on
+smartTraverse :: forall c b . SmartClassyPlate c (ClassIgnoresSubtree c b) b => (forall a . c a => a -> a) -> b -> b
+{-# INLINE smartTraverse #-}
+smartTraverse = smartTraverse_ (undefined :: FlagToken (ClassIgnoresSubtree c b)) (undefined :: ClsToken c)
+
+-- | Traverse only those parts of the data structure that could possibly contain elements that the given monadic function can be applied on
+smartTraverseM :: forall c b m . (SmartClassyPlate c (ClassIgnoresSubtree c b) b, Monad m) => (forall a . c a => a -> m a) -> b -> m b
+{-# INLINE smartTraverseM #-}
+smartTraverseM = smartTraverseM_ (undefined :: FlagToken (ClassIgnoresSubtree c b)) (undefined :: ClsToken c)
+
+instance (GoodOperationForAuto c b) => SmartClassyPlate c True b where
+  smartTraverse_ _ t f a = app (undefined :: FlagToken (AppSelector c b)) t f a
+  {-# INLINE smartTraverse_ #-}
+  smartTraverseM_ _ t f a = appM (undefined :: FlagToken (AppSelector c b)) t f a
+  {-# INLINE smartTraverseM_ #-}
+
+{-# SPECIALIZE INLINE classyTraverse_ :: ClassyPlate (MonoMatch x) sel b => (forall a . MonoMatch x a => a -> a) -> b -> b #-}
+
+-- | A class for the simple case when the applied function is monomorphic.
 class MonoMatch a b where
+  -- | Apply a monomorphic function on a polymorphic data structure.
   monoApp :: (a -> a) -> b -> b
 
 instance MonoMatch a a where
