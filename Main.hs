@@ -15,10 +15,10 @@ import Criterion.Main
 
 our1 d = apply @(MonoMatch D) undefined (monoApp testFun1) (generateA d)
 our2 d = apply @(MonoMatch C) undefined (monoApp testFun2) (generateA d)
--- auto1 d = applyAuto_ @(MonoMatch D) (monoApp testFun1) (generateA d)
--- auto2 d = applyAuto_ @(MonoMatch C) (monoApp testFun2) (generateA d)
--- cond1 d = applySelective @(MonoMatch D) (monoApp testFun1) (const True) (generateA d)
--- cond2 d = applySelective @(MonoMatch C) (monoApp testFun2) (const True) (generateA d)
+auto1 d = applyAuto_ @(MonoMatch D) (monoApp testFun1) (generateA d)
+auto2 d = applyAuto_ @(MonoMatch C) (monoApp testFun2) (generateA d)
+cond1 d = applySelective @(MonoMatch D) undefined (monoApp testFun1) (const True) (generateA d)
+cond2 d = applySelective @(MonoMatch C) undefined (monoApp testFun2) (const True) (generateA d)
 
 -- uniplate d = 
 
@@ -41,26 +41,26 @@ main = defaultMain
         , bench "101" $ nf our2 101
         , bench "141" $ nf our2 141]
     ]
-  -- , bgroup "auto"
-  --   [ bgroup "deep" 
-  --       [ bench "61" $ nf auto1 61
-  --       , bench "101" $ nf auto1 101
-  --       , bench "141" $ nf auto1 141]
-  --   , bgroup "shallow" 
-  --       [ bench "61" $ nf auto2 61
-  --       , bench "101" $ nf auto2 101
-  --       , bench "141" $ nf auto2 141]
-  --   ]
-  -- , bgroup "conditional"
-  --   [ bgroup "deep" 
-  --       [ bench "61" $ nf cond1 61
-  --       , bench "101" $ nf cond1 101
-  --       , bench "141" $ nf cond1 141]
-  --   , bgroup "shallow" 
-  --       [ bench "61" $ nf cond2 61
-  --       , bench "101" $ nf cond2 101
-  --       , bench "141" $ nf cond2 141]
-    -- ]
+  , bgroup "auto"
+    [ bgroup "deep" 
+        [ bench "61" $ nf auto1 61
+        , bench "101" $ nf auto1 101
+        , bench "141" $ nf auto1 141]
+    , bgroup "shallow" 
+        [ bench "61" $ nf auto2 61
+        , bench "101" $ nf auto2 101
+        , bench "141" $ nf auto2 141]
+    ]
+  , bgroup "conditional"
+    [ bgroup "deep" 
+        [ bench "61" $ nf cond1 61
+        , bench "101" $ nf cond1 101
+        , bench "141" $ nf cond1 141]
+    , bgroup "shallow" 
+        [ bench "61" $ nf cond2 61
+        , bench "101" $ nf cond2 101
+        , bench "141" $ nf cond2 141]
+    ]
   , bgroup "autoUni" 
     [ bgroup "deep" 
         [ bench "61" $ nf autoUni1 61

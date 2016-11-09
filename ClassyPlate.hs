@@ -27,11 +27,17 @@ import Control.Parallel.Strategies
 import Data.Type.Bool
 import Data.Type.List hiding (Distinct)
 
+-- FIXME: when TH supports type application we can remove the token parameters
+
 type GoodOperationForAuto c e = (GoodOperationFor c e, Generic e)
 type GoodOperationFor c e = (App (AppSelector c e) c e)
 
 type family ClassIgnoresSubtree (cls :: * -> Constraint) (typ :: *) :: Bool where
-  ClassIgnoresSubtree cls typ = Distinct (SelectedElements cls) (MemberTypes typ)
+  ClassIgnoresSubtree cls typ = Not (AnySelected cls (MemberTypes typ))
+
+type family AnySelected (c :: * -> Constraint) (ls :: [*]) :: Bool where
+  AnySelected c (fst ': rest) = AppSelector c fst || AnySelected c rest
+  AnySelected c '[] = False
 
 type family Distinct (ls1 :: [k]) (ls2 :: [k]) :: Bool where
   Distinct '[] ls2 = True
@@ -44,6 +50,9 @@ type family MemberTypes (typ :: *) :: [*] where
 type family GetMemberTypes (checked :: [*]) (typ :: *) :: [*] where 
   -- primitive types without Rep instance
   GetMemberTypes checked Char = '[Char]
+  GetMemberTypes checked Int = '[Int]
+  GetMemberTypes checked Float = '[Float]
+  GetMemberTypes checked Double = '[Double]
   GetMemberTypes checked t = GetElementTypes checked (GG.Rep t)
 
 type family GetElementTypes (checked :: [*]) (typ :: * -> *) :: [*] where 
@@ -62,13 +71,12 @@ type family GetElementTypesField (checked :: [*]) (inChecked :: Bool) (typ :: *)
   GetElementTypesField checked True typ = '[]
   GetElementTypesField checked False typ = Insert typ (GetMemberTypes (typ ': checked) typ)
 
-type family SelectedElements (c :: * -> Constraint) :: [*]
-
 type family AppSelector (c :: * -> Constraint) (a :: *) :: Bool
 
 data ClsToken (c :: * -> Constraint)
 data FlagToken (c :: Bool)
 
+-- | A class for applying a function if the class of the functions allows the application
 class App (flag :: Bool) c b where
   app :: FlagToken flag -> ClsToken c -> (forall a . c a => a -> a) -> b -> b
   appM :: Monad m => FlagToken flag -> ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
@@ -90,7 +98,7 @@ instance App 'False c b where
   {-# INLINE appOpt #-}
   appOpt _ _ _ _ = Nothing
 
-class GoodOperationFor c b => Apply c b where
+class GoodOperationFor c b => ClassyPlate c b where
   apply :: ClsToken c -> (forall a . c a => a -> a) -> b -> b
   applyM :: Monad m => ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
 
@@ -115,7 +123,7 @@ instance (GoodOperationForAuto c b) => AutoApply c True b where
   applyAutoM _ t f a = appM (undefined :: FlagToken (AppSelector c b)) t f a
   {-# INLINE applyAutoM #-}
 
-{-# SPECIALIZE INLINE apply :: Apply (MonoMatch x) sel b => (forall a . MonoMatch x a => a -> a) -> b -> b #-}
+{-# SPECIALIZE INLINE apply :: ClassyPlate (MonoMatch x) sel b => (forall a . MonoMatch x a => a -> a) -> b -> b #-}
 
 class MonoMatch a b where
   monoApp :: (a -> a) -> b -> b

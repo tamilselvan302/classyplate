@@ -23,9 +23,10 @@ makeNormalCPForDataType name tvs cons
   = let headType = foldl AppT (ConT name) (map (VarT . getTVName) tvs)
         clsVar = mkName "c"
      in InstanceD Nothing (generateCtx clsVar headType cons) 
-                          (ConT ''Apply `AppT` VarT clsVar `AppT` headType) 
+                          (ConT ''ClassyPlate `AppT` VarT clsVar `AppT` headType) 
                           (generateDefs clsVar headType name cons)
 
+-- | Creates the @ClassyPlate@
 makeAutoCPForDataType :: Name -> [TyVarBndr] -> [ConRep] -> Dec
 makeAutoCPForDataType name tvs cons
   = let headType = foldl AppT (ConT name) (map (VarT . getTVName) tvs)
@@ -41,7 +42,7 @@ makeAutoCPForDataType name tvs cons
 generateCtx :: Name -> Type -> [ConRep] -> Cxt
 generateCtx clsVar selfType cons 
   = (ConT ''GoodOperationFor `AppT` VarT clsVar `AppT` selfType) 
-      : map ((ConT ''Apply `AppT` VarT clsVar) `AppT`) (concatMap (\(_, args) -> catMaybes args) cons)
+      : map ((ConT ''ClassyPlate `AppT` VarT clsVar) `AppT`) (concatMap (\(_, args) -> catMaybes args) cons)
 
 -- | Generates the body of the instance definitions for normal classyplates
 generateDefs :: Name -> Type -> Name -> [ConRep] -> [Dec]
@@ -67,6 +68,8 @@ generateAutoDefs clsVar headType tyName cons =
   , FunD 'applyAutoM (map (generateAppAutoMClause clsVar headType tyName) cons)
   ]
 
+-- * Normal definitions
+
 -- | Creates the clause for the @apply@ function for one constructor: @apply t f (Add e1 e2) = app (undefined :: FlagToken (AppSelector c (Expr dom stage))) t f $ Add (apply t f e1) (apply t f e2)@
 generateAppClause :: Name -> Type -> Name -> ConRep -> Clause
 generateAppClause clsVar headType tyName (conName, args) 
@@ -87,6 +90,8 @@ generateRecombineExpr conName tokenName funName args
   = foldl AppE (ConE conName) (map mapArgRep args)
   where mapArgRep (True, n) = VarE 'apply `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
         mapArgRep (False, n) = VarE n
+
+-- * Monadic definitions
 
 -- | Creates the clause for the @applyM@ function for one constructor: @applyM t f (Ann ann e) = appM (undefined :: FlagToken (AppSelector c (Ann e dom stage))) t f =<< (Ann <$> return ann <*> applyM t f e)@
 generateAppMClause :: Name -> Type -> Name -> ConRep -> Clause
@@ -114,6 +119,8 @@ generateRecombineMExpr conName tokenName funName (fst:args)
   where mapArgRep (True, n) = VarE 'applyM `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
         mapArgRep (False, n) = VarE 'return `AppE` VarE n
 
+-- * Selective definitions
+
 -- | Creates the clause for the @applySelective@ function for one constructor: @applySelective t f pred val@(CB b) = appIf t f pred val (CB (applySelective t f pred b))@
 generateSelectiveAppClause :: Name -> ConRep -> Clause
 generateSelectiveAppClause tyName (conName, args) 
@@ -135,6 +142,8 @@ generateSelectiveRecombineExpr conName tokenName funName predName args
   = foldl AppE (ConE conName) (map mapArgRep args)
   where mapArgRep (True, n) = VarE 'applySelective `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE predName `AppE` VarE n
         mapArgRep (False, n) = VarE n
+
+-- * Monadic selective definitions
 
 -- | Creates the clause for the @applySelectiveM@ function for one constructor:
 generateSelectiveAppMClause :: Name -> ConRep -> Clause
@@ -162,6 +171,8 @@ generateSelectiveRecombineMExpr conName tokenName funName predName (fst:args)
   where mapArgRep (True, n) = VarE 'applySelectiveM `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE predName `AppE` VarE n
         mapArgRep (False, n) = VarE 'return `AppE` VarE n
 
+-- * Automatic definitions
+
 -- | Creates the clause for the @applyAuto@ function for one constructor
 generateAppAutoClause :: Name -> Type -> Name -> ConRep -> Clause
 generateAppAutoClause clsVar headType tyName (conName, args) 
@@ -180,6 +191,8 @@ generateAutoRecombineExpr clsVar conName tokenName funName args
               `AppE` (VarE 'undefined `SigE` (ConT ''FlagToken `AppT` (ConT ''ClassIgnoresSubtree `AppT` VarT clsVar `AppT` t))) 
               `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
         mapArgRep (Nothing, n) = VarE n
+
+-- * Monadic automatic definitions
 
 -- | Creates the clause for the @applyAutoM@ function for one constructor
 generateAppAutoMClause :: Name -> Type -> Name -> ConRep -> Clause
@@ -205,26 +218,18 @@ generateAutoRecombineMExpr clsVar conName tokenName funName (fst:args)
              `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
         mapArgRep (Nothing, n) = VarE 'return `AppE` VarE n
 
-
+-- | Gets the name of a type variable
 getTVName :: TyVarBndr -> Name
 getTVName (PlainTV n) = n
 getTVName (KindedTV n _) = n
 
-
+-- | The information we need from a constructor.
 type ConRep = (Name, [Maybe Type])
 
+-- | Extracts the necessary information from a constructor.
 getConRep :: [Name] -> Con -> ConRep
 getConRep primitives (NormalC n args) = (n, map (Just . snd) args)
 getConRep primitives (RecC n args) = (n, map (\(fldN,_,t) -> if fldN `elem` primitives then Nothing else Just t) args)
 getConRep primitives (InfixC (_,t1) n (_,t2)) = (n, [Just t1, Just t2])
--- getConArgs (ForallC _ _ c) = getConArgs c
--- getConArgs (GadtC _ args _) = map snd args
--- getConArgs (RecGadtC _ args _) = map (\(_,_,t) -> t) args
-
-
--- instance GoodOperation c => Apply c A where
---   apply f (ABC b c) = app @(AppSelector c A) @c f $ ABC (apply @c f b) (apply @c f c)
---   applyM f (ABC b c) = appM @(AppSelector c A) @c f =<< (ABC <$> (applyM @c f b) <*> (applyM @c f c))
---   applySelective f pred val@(ABC b c) = appIf @c f pred val (ABC (applySelective @c f pred b) (applySelective @c f pred c))
---   applySelectiveM f pred val@(ABC b c) = appIfM @c f pred val (ABC <$> (applySelectiveM @c f pred b) <*> (applySelectiveM @c f pred c))
-
+getConRep primitives (ForallC _ _ c) = getConRep primitives c
+getConRep _ _ = error "GADTs are not supported"

@@ -1,6 +1,6 @@
 {-# LANGUAGE Rank2Types, ConstraintKinds, KindSignatures, TypeFamilies, ScopedTypeVariables, MultiParamTypeClasses, AllowAmbiguousTypes
            , FlexibleContexts, FlexibleInstances, UndecidableInstances, DataKinds, TypeApplications, DeriveGeneric, DeriveDataTypeable
-           , TypeOperators, PolyKinds, ScopedTypeVariables, TemplateHaskell #-}
+           , TypeOperators, PolyKinds, ScopedTypeVariables, TemplateHaskell, RankNTypes #-}
 module MiniLangExample where
 
 import GHC.Exts
@@ -36,12 +36,11 @@ instance Transform (Ann Name dom stage) where
 type instance AppSelector Transform x = TransformAppSelector x
 
 type family TransformAppSelector x where 
-  TransformAppSelector (Ann Expr dom stage) = True
-  TransformAppSelector (Ann Name dom stage) = True
+  TransformAppSelector (Ann e dom stage) = True
   TransformAppSelector x = False
 
-
 test = apply (undefined :: ClsToken Transform) trf $ testExpr
+test2 = applyAuto_ @Transform trf $ testExpr
 
 makeClassyPlate [ '_annotation ] ''Ann
 makeClassyPlate [] ''Expr

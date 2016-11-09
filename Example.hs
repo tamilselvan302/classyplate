@@ -37,8 +37,6 @@ type instance AppSelector F C = 'True
 type instance AppSelector F D = 'False
 type instance AppSelector F E = 'False
 
--- type instance SelectedElements F = '[ B, C ]
-
 --------
 
 test2 = applyM @Debug undefined debugCs $ ABC (BA (ABC B (CB B))) (CD D)
@@ -51,8 +49,6 @@ instance Debug C where
   
 type instance AppSelector Debug a = DebugSelector a
 
--- type instance SelectedElements Debug = '[ C ]
-
 type family DebugSelector t where
   DebugSelector C = 'True
   DebugSelector _ = 'False
@@ -61,8 +57,6 @@ type family DebugSelector t where
 
 test3 :: A
 test3 = apply @(MonoMatch C) undefined (monoApp (\c -> case c of CB b -> CB (BA (ABC b (CB B))); CD d -> CD D)) $ ABC (BA (ABC B (CB B))) (CB B)
-
-type instance SelectedElements (MonoMatch t) = '[ t ]
 
 -------
 
@@ -82,8 +76,6 @@ instance DebugWhere E where
   debugWhereCs c = error "Should never go here" >> return c 
 
 type instance AppSelector DebugWhere a = DebugWhereSelector a
-
--- type instance SelectedElements DebugWhere = '[ forall x . C x, D, E ]
 
 type family DebugWhereSelector t where
   DebugWhereSelector C = 'True
@@ -113,33 +105,4 @@ makeClassyPlate [] ''B
 makeClassyPlate [] ''C
 makeClassyPlate [] ''D
 makeClassyPlate [] ''E
-
-instance (GoodOperationForAuto c A, GoodOperationForAuto c B, GoodOperationForAuto c C, GoodOperationForAuto c D, GoodOperationForAuto c E) => AutoApply c False A where
-  applyAuto t f (ABC b c) = app @(AppSelector c A) undefined t f $ ABC (applyAuto @c @(ClassIgnoresSubtree c B) t f b) (applyAuto @c @(ClassIgnoresSubtree c C) t f c)
-  applyAutoM t f (ABC b c) = appM @(AppSelector c A) undefined t f =<< (ABC <$> applyAutoM @c @(ClassIgnoresSubtree c B) t f b <*> applyAutoM @c @(ClassIgnoresSubtree c C) t f c)
-
-instance (GoodOperationForAuto c A, GoodOperationForAuto c B, GoodOperationForAuto c C, GoodOperationForAuto c D, GoodOperationForAuto c E) => AutoApply c False B where
-  applyAuto t f B = app @(AppSelector c B) undefined t f B
-  applyAuto t f (BA a) = app @(AppSelector c B) undefined t f $ BA (applyAuto @c @(ClassIgnoresSubtree c A) t f a)
-
-  applyAutoM t f B = appM @(AppSelector c B) undefined t f B
-  applyAutoM t f (BA a) = appM @(AppSelector c B) undefined t f =<< (BA <$> applyAutoM @c @(ClassIgnoresSubtree c A) t f a)
-
-instance (GoodOperationForAuto c A, GoodOperationForAuto c B, GoodOperationForAuto c C, GoodOperationForAuto c D, GoodOperationForAuto c E) => AutoApply c False C where
-  applyAuto t f (CB b) = app @(AppSelector c C) undefined t f $ CB (applyAuto @c @(ClassIgnoresSubtree c B) t f b)
-  applyAuto t f (CD d) = app @(AppSelector c C) undefined t f $ CD (applyAuto @c @(ClassIgnoresSubtree c D) t f d)
-
-  applyAutoM t f (CB b) = appM @(AppSelector c C) undefined t f =<< (CB <$> applyAutoM @c @(ClassIgnoresSubtree c B) t f b)
-  applyAutoM t f (CD d) = appM @(AppSelector c C) undefined t f =<< (CD <$> applyAutoM @c @(ClassIgnoresSubtree c D) t f d)
-
-instance (GoodOperationForAuto c E, GoodOperationForAuto c D) => AutoApply c False D where
-  applyAuto t f (DDE d e) = app @(AppSelector c D) undefined t f $ DDE (applyAuto @c @(ClassIgnoresSubtree c D) t f d) (applyAuto @c @(ClassIgnoresSubtree c E) t f e)
-  applyAuto t f D = app @(AppSelector c D) undefined t f $ D
-
-  applyAutoM t f (DDE d e) = appM @(AppSelector c D) undefined t f =<< (DDE <$> applyAutoM @c @(ClassIgnoresSubtree c D) t f d <*> applyAutoM @c @(ClassIgnoresSubtree c E) t f e)
-  applyAutoM t f D = appM @(AppSelector c D) undefined t f =<< (return D)
-
-instance (GoodOperationForAuto c E) => AutoApply c False E where
-  applyAuto t f E = app @(AppSelector c E) undefined t f E
-  applyAutoM t f E = appM @(AppSelector c E) undefined t f E
 
