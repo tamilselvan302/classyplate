@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskellQuotes #-} 
-module TH where
+module TH (makeClassyPlate) where
 
 import Data.Maybe
 import Control.Monad
@@ -8,6 +8,7 @@ import Control.Applicative
 import Language.Haskell.TH
 
 import ClassyPlate
+import TypePrune
 
 -- | Creates ClassyPlate instances for a datatype. Can specify which fields should not be traversed.
 makeClassyPlate :: [Name] -> Name -> Q [Dec]
