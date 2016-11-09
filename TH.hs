@@ -14,27 +14,57 @@ makeClassyPlate :: [Name] -> Name -> Q [Dec]
 makeClassyPlate primitives dataType 
   = do inf <- reify dataType
        case inf of (TyConI (DataD _ name tvs _ cons _)) 
-                     -> return $ [makeCPForDataType name tvs (map (getConRep primitives) cons)]
+                     -> return $ [ makeNormalCPForDataType name tvs (map (getConRep primitives) cons)
+                                 , makeAutoCPForDataType name tvs (map (getConRep primitives) cons)
+                                 ]
 
-makeCPForDataType :: Name -> [TyVarBndr] -> [ConRep] -> Dec
-makeCPForDataType name tvs cons
+makeNormalCPForDataType :: Name -> [TyVarBndr] -> [ConRep] -> Dec
+makeNormalCPForDataType name tvs cons
   = let headType = foldl AppT (ConT name) (map (VarT . getTVName) tvs)
         clsVar = mkName "c"
      in InstanceD Nothing (generateCtx clsVar headType cons) 
                           (ConT ''Apply `AppT` VarT clsVar `AppT` headType) 
                           (generateDefs clsVar headType name cons)
 
+makeAutoCPForDataType :: Name -> [TyVarBndr] -> [ConRep] -> Dec
+makeAutoCPForDataType name tvs cons
+  = let headType = foldl AppT (ConT name) (map (VarT . getTVName) tvs)
+        clsVar = mkName "c"
+     in InstanceD Nothing (generateAutoCtx clsVar headType cons) 
+                          (ConT ''AutoApply 
+                            `AppT` VarT clsVar 
+                            `AppT` ConT 'False  
+                            `AppT` headType) 
+                          (generateAutoDefs clsVar headType name cons)
+
+
 generateCtx :: Name -> Type -> [ConRep] -> Cxt
 generateCtx clsVar selfType cons 
   = (ConT ''GoodOperationFor `AppT` VarT clsVar `AppT` selfType) 
       : map ((ConT ''Apply `AppT` VarT clsVar) `AppT`) (concatMap (\(_, args) -> catMaybes args) cons)
 
+-- | Generates the body of the instance definitions for normal classyplates
 generateDefs :: Name -> Type -> Name -> [ConRep] -> [Dec]
 generateDefs clsVar headType tyName cons = 
   [ FunD 'apply (map (generateAppClause clsVar headType tyName) cons)
   , FunD 'applyM (map (generateAppMClause clsVar headType tyName) cons)
   , FunD 'applySelective (map (generateSelectiveAppClause tyName) cons)
   , FunD 'applySelectiveM (map (generateSelectiveAppMClause tyName) cons)
+  ]
+
+
+generateAutoCtx :: Name -> Type -> [ConRep] -> Cxt
+generateAutoCtx clsVar selfType cons 
+  = (ConT ''GoodOperationForAuto `AppT` VarT clsVar `AppT` selfType) 
+      : map (\t -> (ConT ''AutoApply `AppT` VarT clsVar
+                      `AppT` (ConT ''ClassIgnoresSubtree `AppT` VarT clsVar `AppT` t)) `AppT` t)
+            (concatMap (\(_, args) -> catMaybes args) cons)
+
+-- | Generates the body of the instance definition for auto classy plate
+generateAutoDefs :: Name -> Type -> Name -> [ConRep] -> [Dec]
+generateAutoDefs clsVar headType tyName cons = 
+  [ FunD 'applyAuto (map (generateAppAutoClause clsVar headType tyName) cons)
+  , FunD 'applyAutoM (map (generateAppAutoMClause clsVar headType tyName) cons)
   ]
 
 -- | Creates the clause for the @apply@ function for one constructor: @apply t f (Add e1 e2) = app (undefined :: FlagToken (AppSelector c (Expr dom stage))) t f $ Add (apply t f e1) (apply t f e2)@
@@ -106,7 +136,7 @@ generateSelectiveRecombineExpr conName tokenName funName predName args
   where mapArgRep (True, n) = VarE 'applySelective `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE predName `AppE` VarE n
         mapArgRep (False, n) = VarE n
 
--- | Creates the clause for the @applySelective@ function for one constructor: @applySelective t f pred val@(CB b) = appIf t f pred val (CB (applySelective t f pred b))@
+-- | Creates the clause for the @applySelectiveM@ function for one constructor:
 generateSelectiveAppMClause :: Name -> ConRep -> Clause
 generateSelectiveAppMClause tyName (conName, args) 
   = Clause [VarP tokenName, VarP funName, VarP predName, AsP valName $ ConP conName (map VarP $ take (length args) argNames)] 
@@ -132,6 +162,48 @@ generateSelectiveRecombineMExpr conName tokenName funName predName (fst:args)
   where mapArgRep (True, n) = VarE 'applySelectiveM `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE predName `AppE` VarE n
         mapArgRep (False, n) = VarE 'return `AppE` VarE n
 
+-- | Creates the clause for the @applyAuto@ function for one constructor
+generateAppAutoClause :: Name -> Type -> Name -> ConRep -> Clause
+generateAppAutoClause clsVar headType tyName (conName, args) 
+  = Clause [WildP, VarP tokenName, VarP funName, ConP conName (map VarP $ take (length args) argNames)] 
+      (NormalB (generateAppExpr clsVar headType tokenName funName 
+                 `AppE` generateAutoRecombineExpr clsVar conName tokenName funName (zip args argNames))) []
+  where argNames = map (mkName . ("a"++) . show) [0..]
+        tokenName = mkName "t"
+        funName = mkName "f"
+
+generateAutoRecombineExpr :: Name -> Name -> Name -> Name -> [(Maybe Type, Name)] -> Exp
+generateAutoRecombineExpr clsVar conName tokenName funName args
+  = foldl AppE (ConE conName) (map mapArgRep args)
+  where mapArgRep (Just t, n) 
+          = VarE 'applyAuto 
+              `AppE` (VarE 'undefined `SigE` (ConT ''FlagToken `AppT` (ConT ''ClassIgnoresSubtree `AppT` VarT clsVar `AppT` t))) 
+              `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
+        mapArgRep (Nothing, n) = VarE n
+
+-- | Creates the clause for the @applyAutoM@ function for one constructor
+generateAppAutoMClause :: Name -> Type -> Name -> ConRep -> Clause
+generateAppAutoMClause clsVar headType tyName (conName, args) 
+  = Clause [WildP, VarP tokenName, VarP funName, ConP conName (map VarP $ take (length args) argNames)] 
+      (NormalB (InfixE (Just $ generateAppMExpr clsVar headType tokenName funName)
+                       (VarE '(=<<))
+                       (Just $ generateAutoRecombineMExpr clsVar conName tokenName funName (zip args argNames)) )) []
+  where argNames = map (mkName . ("a"++) . show) [0..]
+        tokenName = mkName "t"
+        funName = mkName "f"
+
+generateAutoRecombineMExpr :: Name -> Name -> Name -> Name -> [(Maybe Type, Name)] -> Exp
+generateAutoRecombineMExpr _ conName tokenName funName []
+  = AppE (VarE 'return) (ConE conName)
+generateAutoRecombineMExpr clsVar conName tokenName funName (fst:args)
+  = foldl (\base -> InfixE (Just base) (VarE '(<*>)) . Just) 
+          (InfixE (Just $ ConE conName) (VarE '(<$>)) (Just $ mapArgRep fst)) 
+          (map mapArgRep args)
+  where mapArgRep (Just t, n) 
+          = VarE 'applyAutoM 
+             `AppE` (VarE 'undefined `SigE` (ConT ''FlagToken `AppT` (ConT ''ClassIgnoresSubtree `AppT` VarT clsVar `AppT` t))) 
+             `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
+        mapArgRep (Nothing, n) = VarE 'return `AppE` VarE n
 
 
 getTVName :: TyVarBndr -> Name

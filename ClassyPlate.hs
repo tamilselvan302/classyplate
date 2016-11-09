@@ -27,7 +27,7 @@ import Control.Parallel.Strategies
 import Data.Type.Bool
 import Data.Type.List hiding (Distinct)
 
--- type GoodOperationFor c e = (App (AppSelector c e) c e, AutoApply c (ClassIgnoresSubtree c e) e)
+type GoodOperationForAuto c e = (GoodOperationFor c e, Generic e)
 type GoodOperationFor c e = (App (AppSelector c e) c e)
 
 type family ClassIgnoresSubtree (cls :: * -> Constraint) (typ :: *) :: Bool where
@@ -66,8 +66,8 @@ type family SelectedElements (c :: * -> Constraint) :: [*]
 
 type family AppSelector (c :: * -> Constraint) (a :: *) :: Bool
 
-data family ClsToken (c :: * -> Constraint) :: *
-data family FlagToken (c :: Bool) :: *
+data ClsToken (c :: * -> Constraint)
+data FlagToken (c :: Bool)
 
 class App (flag :: Bool) c b where
   app :: FlagToken flag -> ClsToken c -> (forall a . c a => a -> a) -> b -> b
@@ -90,29 +90,29 @@ instance App 'False c b where
   {-# INLINE appOpt #-}
   appOpt _ _ _ _ = Nothing
 
-class App (AppSelector c b) c b => Apply c b where
+class GoodOperationFor c b => Apply c b where
   apply :: ClsToken c -> (forall a . c a => a -> a) -> b -> b
   applyM :: Monad m => ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
 
   applySelective :: ClsToken c -> (forall a . c a => a -> a) -> (forall a . c a => a -> Bool) -> b -> b
   applySelectiveM :: Monad m => ClsToken c -> (forall a . c a => a -> m a) -> (forall a . c a => a -> m Bool) -> b -> m b
 
-class App (AppSelector c b) c b => AutoApply c (sel :: Bool) b where
-  applyAuto :: ClsToken c -> (forall a . c a => a -> a) -> b -> b
-  applyAutoM :: Monad m => ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
+class (GoodOperationForAuto c b) => AutoApply c (sel :: Bool) b where
+  applyAuto :: FlagToken sel -> ClsToken c -> (forall a . c a => a -> a) -> b -> b
+  applyAutoM :: Monad m => FlagToken sel -> ClsToken c -> (forall a . c a => a -> m a) -> b -> m b
 
 applyAuto_ :: forall c b . AutoApply c (ClassIgnoresSubtree c b) b => (forall a . c a => a -> a) -> b -> b
 {-# INLINE applyAuto_ #-}
-applyAuto_ = applyAuto @c @(ClassIgnoresSubtree c b) (undefined :: ClsToken c)
+applyAuto_ = applyAuto (undefined :: FlagToken (ClassIgnoresSubtree c b)) (undefined :: ClsToken c)
 
 applyAutoM_ :: forall c b m . (AutoApply c (ClassIgnoresSubtree c b) b, Monad m) => (forall a . c a => a -> m a) -> b -> m b
 {-# INLINE applyAutoM_ #-}
-applyAutoM_ = applyAutoM @c @(ClassIgnoresSubtree c b) (undefined :: ClsToken c)
+applyAutoM_ = applyAutoM (undefined :: FlagToken (ClassIgnoresSubtree c b)) (undefined :: ClsToken c)
 
-instance App (AppSelector c b) c b => AutoApply c True b where
-  applyAuto t f a = app (undefined :: FlagToken (AppSelector c b)) t f a
+instance (GoodOperationForAuto c b) => AutoApply c True b where
+  applyAuto _ t f a = app (undefined :: FlagToken (AppSelector c b)) t f a
   {-# INLINE applyAuto #-}
-  applyAutoM t f a = appM (undefined :: FlagToken (AppSelector c b)) t f a
+  applyAutoM _ t f a = appM (undefined :: FlagToken (AppSelector c b)) t f a
   {-# INLINE applyAutoM #-}
 
 {-# SPECIALIZE INLINE apply :: Apply (MonoMatch x) sel b => (forall a . MonoMatch x a => a -> a) -> b -> b #-}
