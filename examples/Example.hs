@@ -13,7 +13,7 @@ import Control.Parallel.Strategies
 import Data.Type.Bool
 import Data.Type.List hiding (Distinct)
 
-import ClassyPlate
+import Data.Generics.ClassyPlate
 
 
 -------------------------------- USAGE-SPECIFIC PART

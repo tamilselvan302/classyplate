@@ -15,7 +15,7 @@
            , TypeOperators
            , PolyKinds 
            #-}
-module ClassyPlate.Core
+module Data.Generics.ClassyPlate.Core
   ( -- public functions and classes
     classyTraverse, classyTraverseM, selectiveTraverse, selectiveTraverseM, smartTraverse, smartTraverseM
   , ClassyPlate, SmartClassyPlate
@@ -32,9 +32,8 @@ import GHC.Exts
 import Data.Maybe
 import GHC.Generics (Generic)
 import Data.Data (Data)
-import Control.Parallel.Strategies
 
-import ClassyPlate.TypePrune
+import Data.Generics.ClassyPlate.TypePrune
 
 -- FIXME: when TH supports type application we can remove the token parameters
 

@@ -21,10 +21,8 @@ import Language.Haskell.TH (pprint, runIO)
 import Data.Type.Bool
 import Data.Type.List hiding (Distinct)
 
-import TypePrune
-import ClassyPlate
+import Data.Generics.ClassyPlate
 import MiniLanguage
-import TH
 
 testExpr :: Ann Expr Dom RangeStage
 testExpr = Ann (NodeInfo NoInfo NodeSpan) $ Add 
