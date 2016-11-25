@@ -1,6 +1,6 @@
 {-# LANGUAGE Rank2Types, ConstraintKinds, KindSignatures, TypeFamilies, ScopedTypeVariables, MultiParamTypeClasses, AllowAmbiguousTypes
            , FlexibleContexts, FlexibleInstances, UndecidableInstances, DataKinds, TypeApplications, DeriveGeneric, DeriveDataTypeable
-           , TypeOperators, PolyKinds, ScopedTypeVariables, TemplateHaskell #-}
+           , TypeOperators, PolyKinds, ScopedTypeVariables, TemplateHaskell, TupleSections #-}
 module Example where
 
 import GHC.Exts
@@ -8,37 +8,51 @@ import Data.Maybe
 import GHC.Generics (Generic)
 import qualified GHC.Generics as GG
 import Data.Data (Data)
+import Control.Monad
 import Control.Parallel.Strategies
 
 import Data.Type.Bool
 import Data.Type.List hiding (Distinct)
 
 import Data.Generics.ClassyPlate
+import Data.Generics.ClassyPlate.Generate
+import Debug.Trace
 
 
 -------------------------------- USAGE-SPECIFIC PART
 
 test :: A
-test = classyTraverse @F trf $ ABC (BA (ABC B (CB B))) (CB B)
+test = bottomUp @F trf $ ABC (BA (ABC B (CB B))) (CB B)
 
 class F a where
   trf :: a -> a
 
 instance F B where
-  trf b = B
+  trf b = b
 
 instance F C where
-  trf c = CB B
-  
+  trf c = CD D
+
 type instance AppSelector F A = 'False
 type instance AppSelector F B = 'True
 type instance AppSelector F C = 'True
 type instance AppSelector F D = 'False
 type instance AppSelector F E = 'False
 
+
+
+topDownTrav :: forall c b . ClassyPlate c b => (forall a . (ClassyPlate c a, c a) => a -> a) -> b -> b
+{-# INLINE topDownTrav #-}
+topDownTrav trf = descend @c (topDownTrav @c trf . trf)
+
+bottomUpTrav :: forall c b . ClassyPlate c b => (forall a . (ClassyPlate c a, c a) => a -> a) -> b -> b
+{-# INLINE bottomUpTrav #-}
+bottomUpTrav trf = descend @c (trf . bottomUpTrav @c trf)
+
+
 --------
 
-test2 = classyTraverseM @Debug debugCs $ ABC (BA (ABC B (CB B))) (CD D)
+test2 = bottomUpM @Debug debugCs $ ABC (BA (ABC B (CB B))) (CD D)
 
 class Debug a where
   debugCs :: a -> IO a
@@ -55,7 +69,7 @@ type family DebugSelector t where
 --------
 
 test3 :: A
-test3 = classyTraverse @(MonoMatch C) (monoApp (\c -> case c of CB b -> CB (BA (ABC b (CB B))); CD d -> CD D)) $ ABC (BA (ABC B (CB B))) (CB B)
+test3 = bottomUp @(MonoMatch C) (monoApp (\c -> case c of CB b -> CB (BA (ABC b (CB B))); CD d -> CD D)) $ ABC (BA (ABC B (CB B))) (CB B)
 
 -------
 
@@ -82,7 +96,7 @@ type family DebugWhereSelector t where
   DebugWhereSelector E = 'True
   DebugWhereSelector _ = 'False
 
-test4 = selectiveTraverseM @DebugWhere debugWhereCs (return . debugSubtree) $ ABC (BA (ABC B (CB B))) (CD (DDE D E))
+test4 = selectiveTraverseM @DebugWhere (\e -> (, debugSubtree e) <$> debugWhereCs e) $ ABC (BA (ABC B (CB B))) (CD (DDE D E))
 
 
 -------------------------------- REPRESENTATION-SPECIFIC PART

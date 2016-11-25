@@ -31,9 +31,10 @@ sizeD (DDE d e) = 1 + sizeD d + 1
 
 ---
 
-
-testFun1 D = DDE D E
+testFun1 :: D -> D
+{-# NOINLINE testFun1 #-}
 testFun1 d = d
 
-testFun2 (CB b) = CB (BA (ABC b (CB B)))
+testFun2 :: C -> C
+{-# NOINLINE testFun2 #-}
 testFun2 c = c

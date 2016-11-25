@@ -1,9 +1,9 @@
-{-# LANGUAGE TypeApplications, FlexibleContexts, RankNTypes, DataKinds, LambdaCase #-}
+{-# LANGUAGE TypeApplications, FlexibleContexts, RankNTypes, DataKinds, LambdaCase, ScopedTypeVariables, ConstraintKinds, AllowAmbiguousTypes #-}
 
 module Main where
 
 
-import ClassyPlate
+import Data.Generics.ClassyPlate
 import Example
 
 import DirectUni (directUni1, directUni2)
@@ -13,16 +13,18 @@ import Generate
 
 import Criterion.Main
 
-our1 d = classyTraverse @(MonoMatch D) (monoApp testFun1) (generateA d)
-our2 d = classyTraverse @(MonoMatch C) (monoApp testFun2) (generateA d)
+our1 d = bottomUp @(MonoMatch D) (monoApp testFun1) (generateA d)
+our2 d = bottomUp @(MonoMatch C) (monoApp testFun2) (generateA d)
 auto1 d = smartTraverse @(MonoMatch D) (monoApp testFun1) (generateA d)
 auto2 d = smartTraverse @(MonoMatch C) (monoApp testFun2) (generateA d)
-cond1 d = selectiveTraverse @(MonoMatch D) (monoApp testFun1) (const True) (generateA d)
-cond2 d = selectiveTraverse @(MonoMatch C) (monoApp testFun2) (const True) (generateA d)
 
--- uniplate d = 
+topDown1 d = topDown @(MonoMatch D) (monoApp testFun1) (generateA d)
+topDown2 d = topDown @(MonoMatch C) (monoApp testFun2) (generateA d)
+topDownSelective1 d = selectiveTraverse @(MonoMatch D) (\e -> (monoApp testFun1 e, True)) (generateA d)
+topDownSelective2 d = selectiveTraverse @(MonoMatch C) (\e -> (monoApp testFun2 e, True)) (generateA d)
 
-example = generateA 21
+bottomUp1 d = bottomUpTrav @(MonoMatch D) (monoApp testFun1) (generateA d)
+bottomUp2 d = bottomUpTrav @(MonoMatch C) (monoApp testFun2) (generateA d)
 
 
 main = defaultMain
@@ -41,6 +43,36 @@ main = defaultMain
         , bench "101" $ nf our2 101
         , bench "141" $ nf our2 141]
     ]
+  , bgroup "topdown"
+    [ bgroup "deep" 
+        [ bench "61" $ nf topDown1 61
+        , bench "101" $ nf topDown1 101
+        , bench "141" $ nf topDown1 141]
+    , bgroup "shallow" 
+        [ bench "61" $ nf topDown2 61
+        , bench "101" $ nf topDown2 101
+        , bench "141" $ nf topDown2 141]
+    ]
+  , bgroup "selective"
+    [ bgroup "deep" 
+        [ bench "61" $ nf topDownSelective1 61
+        , bench "101" $ nf topDownSelective1 101
+        , bench "141" $ nf topDownSelective1 141]
+    , bgroup "shallow" 
+        [ bench "61" $ nf topDownSelective2 61
+        , bench "101" $ nf topDownSelective2 101
+        , bench "141" $ nf topDownSelective2 141]
+    ]
+  , bgroup "bottomUp-desc"
+    [ bgroup "deep" 
+        [ bench "61" $ nf bottomUp1 61
+        , bench "101" $ nf bottomUp1 101
+        , bench "141" $ nf bottomUp1 141]
+    , bgroup "shallow" 
+        [ bench "61" $ nf bottomUp2 61
+        , bench "101" $ nf bottomUp2 101
+        , bench "141" $ nf bottomUp2 141]
+    ]
   , bgroup "auto"
     [ bgroup "deep" 
         [ bench "61" $ nf auto1 61
@@ -50,16 +82,6 @@ main = defaultMain
         [ bench "61" $ nf auto2 61
         , bench "101" $ nf auto2 101
         , bench "141" $ nf auto2 141]
-    ]
-  , bgroup "conditional"
-    [ bgroup "deep" 
-        [ bench "61" $ nf cond1 61
-        , bench "101" $ nf cond1 101
-        , bench "141" $ nf cond1 141]
-    , bgroup "shallow" 
-        [ bench "61" $ nf cond2 61
-        , bench "101" $ nf cond2 101
-        , bench "141" $ nf cond2 141]
     ]
   , bgroup "autoUni" 
     [ bgroup "deep" 

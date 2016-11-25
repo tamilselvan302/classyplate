@@ -56,10 +56,12 @@ generateCtx clsVar selfType cons
 -- | Generates the body of the instance definitions for normal classyplates
 generateDefs :: Name -> Type -> Name -> [ConRep] -> [Dec]
 generateDefs clsVar headType tyName cons = 
-  [ FunD 'classyTraverse_ (map (generateAppClause clsVar headType tyName) cons)
-  , FunD 'classyTraverseM_ (map (generateAppMClause clsVar headType tyName) cons)
-  , FunD 'selectiveTraverse_ (map (generateSelectiveAppClause tyName) cons)
-  , FunD 'selectiveTraverseM_ (map (generateSelectiveAppMClause tyName) cons)
+  [ FunD 'bottomUp_ (map (generateAppClause clsVar headType tyName) cons)
+  , FunD 'bottomUpM_ (map (generateAppMClause clsVar headType tyName) cons)
+  , FunD 'topDown_ [generateTopDownClause generateTopDownExpr clsVar headType cons]
+  , FunD 'topDownM_ [generateTopDownClause generateTopDownMExpr clsVar headType cons]
+  , FunD 'descend_ (map (generateDescendAppClause clsVar headType tyName) cons)
+  , FunD 'descendM_ (map (generateDescendMAppClause clsVar headType tyName) cons)
   ]
 
 
@@ -79,7 +81,7 @@ generateAutoDefs clsVar headType tyName cons =
 
 -- * Normal definitions
 
--- | Creates the clause for the @classyTraverse_@ function for one constructor: @classyTraverse_ t f (Add e1 e2) = app (undefined :: FlagToken (AppSelector c (Expr dom stage))) t f $ Add (apply t f e1) (apply t f e2)@
+-- | Creates the clause for the @classyTraverse_@ function for one constructor: @classyTraverse_ t f (Add e1 e2) = app (undefined :: FlagToken (AppSelector c (Expr dom stage))) t f $ Add (classyTraverse_ t f e1) (classyTraverse_ t f e2)@
 generateAppClause :: Name -> Type -> Name -> ConRep -> Clause
 generateAppClause clsVar headType tyName (conName, args) 
   = Clause [VarP tokenName, VarP funName, ConP conName (map VarP $ take (length args) argNames)] 
@@ -97,7 +99,7 @@ generateAppExpr clsVar headType tokenName funName
 generateRecombineExpr :: Name -> Name -> Name -> [(Bool, Name)] -> Exp
 generateRecombineExpr conName tokenName funName args
   = foldl AppE (ConE conName) (map mapArgRep args)
-  where mapArgRep (True, n) = VarE 'classyTraverse_ `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
+  where mapArgRep (True, n) = VarE 'bottomUp_ `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
         mapArgRep (False, n) = VarE n
 
 -- * Monadic definitions
@@ -125,60 +127,99 @@ generateRecombineMExpr conName tokenName funName (fst:args)
   = foldl (\base -> InfixE (Just base) (VarE '(<*>)) . Just) 
           (InfixE (Just $ ConE conName) (VarE '(<$>)) (Just $ mapArgRep fst)) 
           (map mapArgRep args)
-  where mapArgRep (True, n) = VarE 'classyTraverseM_ `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
+  where mapArgRep (True, n) = VarE 'bottomUpM_ `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
         mapArgRep (False, n) = VarE 'return `AppE` VarE n
 
--- * Selective definitions
+-- * Top-down
 
--- | Creates the clause for the @selectiveTraverse_@ function for one constructor: @selectiveTraverse_ t f pred val@(CB b) = appIf t f pred val (CB (applySelective t f pred b))@
-generateSelectiveAppClause :: Name -> ConRep -> Clause
-generateSelectiveAppClause tyName (conName, args) 
-  = Clause [VarP tokenName, VarP funName, VarP predName, AsP valName $ ConP conName (map VarP $ take (length args) argNames)] 
-      (NormalB (generateAppIfExpr tokenName funName predName valName
-                 `AppE` generateSelectiveRecombineExpr conName tokenName funName predName (zip (map isJust args) argNames))) []
+generateTopDownClause :: (Name -> Type -> Name -> Name -> Name -> [ConRep] -> Exp) -> Name -> Type -> [ConRep] -> Clause
+generateTopDownClause expFun clsVar headType cons
+  = Clause [VarP tokenName, VarP funName, VarP elemName] (NormalB $ expFun clsVar headType tokenName funName elemName cons) []
+  where tokenName = mkName "t"
+        funName = mkName "f"
+        elemName = mkName "e"
+
+generateTopDownExpr :: Name -> Type -> Name -> Name -> Name -> [ConRep] -> Exp
+generateTopDownExpr clsVar headType tokenName funName elemName cons
+  = CaseE (VarE 'app `AppE` (VarE 'undefined `SigE` (ConT ''FlagToken `AppT` (ConT ''AppSelector `AppT` VarT clsVar `AppT` headType)))
+                     `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE elemName)
+          (map (createTopDownMatch tokenName funName) cons)
+
+createTopDownMatch :: Name -> Name -> ConRep -> Match
+createTopDownMatch tokenName funName (conName, args) 
+  = Match (ConP conName (map VarP formalArgs)) 
+          (NormalB $ foldl AppE (ConE conName) (map mapArgRep $ zip args formalArgs)) []
+  where argNames = map (mkName . ("a"++) . show) [0..]
+        formalArgs = take (length args) argNames
+        mapArgRep (Just t, n) = VarE 'topDown_ `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
+        mapArgRep (Nothing, n) = VarE n
+
+-- * Monadic top-down
+
+generateTopDownMExpr :: Name -> Type -> Name -> Name -> Name -> [ConRep] -> Exp
+generateTopDownMExpr clsVar headType tokenName funName elemName cons
+  = InfixE (Just $ VarE 'appM `AppE` (VarE 'undefined `SigE` (ConT ''FlagToken `AppT` (ConT ''AppSelector `AppT` VarT clsVar `AppT` headType)))
+                              `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE elemName)
+           (VarE '(>>=))
+           (Just $ LamE [VarP lamName] (CaseE (VarE lamName) (map (generateTopDownMMatch tokenName funName) cons)))
+  where lamName = mkName "x"
+
+generateTopDownMMatch :: Name -> Name -> ConRep -> Match
+generateTopDownMMatch tokenName funName (conName, args)
+  = Match (ConP conName (map VarP argNames)) 
+          (NormalB $ case formalArgs of 
+                       [] -> VarE 'return `AppE` ConE conName
+                       fst:rest -> foldl (\base -> InfixE (Just base) (VarE '(<*>)) . Just) 
+                                         (InfixE (Just $ ConE conName) (VarE '(<$>)) (Just $ mapArgRep fst)) 
+                                         (map mapArgRep rest)
+          ) []
+  where argNames = take (length args) $ map (mkName . ("a"++) . show) [0..]
+        formalArgs = zip args argNames
+        mapArgRep (Just t, n) = VarE 'topDownM_ `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
+        mapArgRep (Nothing, n) = VarE n
+
+
+-- * descend
+
+-- | Creates the clause for the @descend_@ function for one constructor
+generateDescendAppClause :: Name -> Type -> Name -> ConRep -> Clause
+generateDescendAppClause clsVar headType tyName (conName, args) 
+  = Clause [VarP tokenName, VarP funName, ConP conName (map VarP $ take (length args) argNames)] 
+      (NormalB (generateDescendRecombineExpr clsVar conName tokenName funName (zip args argNames))) []
   where argNames = map (mkName . ("a"++) . show) [0..]
         tokenName = mkName "t"
         funName = mkName "f"
-        predName = mkName "p"
-        valName = mkName "v"
 
-generateAppIfExpr :: Name -> Name -> Name -> Name -> Exp
-generateAppIfExpr tokenName funName predName valName
-  = VarE 'appIf `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE predName `AppE` VarE valName
-
-generateSelectiveRecombineExpr :: Name -> Name -> Name -> Name -> [(Bool, Name)] -> Exp
-generateSelectiveRecombineExpr conName tokenName funName predName args
+generateDescendRecombineExpr :: Name -> Name -> Name -> Name -> [(Maybe Type, Name)] -> Exp
+generateDescendRecombineExpr clsVar conName tokenName funName args
   = foldl AppE (ConE conName) (map mapArgRep args)
-  where mapArgRep (True, n) = VarE 'selectiveTraverse_ `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE predName `AppE` VarE n
-        mapArgRep (False, n) = VarE n
+  where mapArgRep (Just t, n) = VarE 'appTD `AppE` (VarE 'undefined `SigE` (ConT ''FlagToken `AppT` (ConT ''AppSelector `AppT` VarT clsVar `AppT` t))) 
+                                            `AppE` VarE tokenName `AppE` VarE funName 
+                                            `AppE` (VarE 'descend_ `AppE` VarE tokenName `AppE` VarE funName) `AppE` VarE n
+        mapArgRep (Nothing, n) = VarE n
 
--- * Monadic selective definitions
+-- * descendM
 
--- | Creates the clause for the @selectiveTraverseM_@ function for one constructor:
-generateSelectiveAppMClause :: Name -> ConRep -> Clause
-generateSelectiveAppMClause tyName (conName, args) 
-  = Clause [VarP tokenName, VarP funName, VarP predName, AsP valName $ ConP conName (map VarP $ take (length args) argNames)] 
-      (NormalB (generateAppIfMExpr tokenName funName predName valName
-                 `AppE` generateSelectiveRecombineMExpr conName tokenName funName predName (zip (map isJust args) argNames))) []
+-- | Creates the clause for the @descendM_@ function for one constructor
+generateDescendMAppClause :: Name -> Type -> Name -> ConRep -> Clause
+generateDescendMAppClause clsVar headType tyName (conName, args) 
+  = Clause [VarP tokenName, VarP funName, ConP conName (map VarP $ take (length args) argNames)] 
+      (NormalB (generateDescendMRecombineExpr clsVar conName tokenName funName (zip args argNames))) []
   where argNames = map (mkName . ("a"++) . show) [0..]
         tokenName = mkName "t"
         funName = mkName "f"
-        predName = mkName "p"
-        valName = mkName "v"
 
-generateAppIfMExpr :: Name -> Name -> Name -> Name -> Exp
-generateAppIfMExpr tokenName funName predName valName
-  = VarE 'appIfM `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE predName `AppE` VarE valName
-
-generateSelectiveRecombineMExpr :: Name -> Name -> Name -> Name -> [(Bool, Name)] -> Exp
-generateSelectiveRecombineMExpr conName tokenName funName predName []
+generateDescendMRecombineExpr :: Name -> Name -> Name -> Name -> [(Maybe Type, Name)] -> Exp
+generateDescendMRecombineExpr clsVar conName tokenName funName []
   = AppE (VarE 'return) (ConE conName)
-generateSelectiveRecombineMExpr conName tokenName funName predName (fst:args)
+generateDescendMRecombineExpr clsVar conName tokenName funName (fst:args)
   = foldl (\base -> InfixE (Just base) (VarE '(<*>)) . Just) 
           (InfixE (Just $ ConE conName) (VarE '(<$>)) (Just $ mapArgRep fst)) 
           (map mapArgRep args)
-  where mapArgRep (True, n) = VarE 'selectiveTraverseM_ `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE predName `AppE` VarE n
-        mapArgRep (False, n) = VarE 'return `AppE` VarE n
+  where mapArgRep (Just t, n) = VarE 'appTDM `AppE` (VarE 'undefined `SigE` (ConT ''FlagToken `AppT` (ConT ''AppSelector `AppT` VarT clsVar `AppT` t))) 
+                                             `AppE` VarE tokenName `AppE` VarE funName 
+                                             `AppE` (VarE 'descendM_ `AppE` VarE tokenName `AppE` VarE funName) `AppE` VarE n
+        mapArgRep (Nothing, n) = VarE 'return `AppE` VarE n
 
 -- * Automatic definitions
 
