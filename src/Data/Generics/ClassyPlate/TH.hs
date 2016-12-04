@@ -179,7 +179,7 @@ generateTopDownMMatch tokenName funName (conName, args)
   where argNames = take (length args) $ map (mkName . ("a"++) . show) [0..]
         formalArgs = zip args argNames
         mapArgRep (Just t, n) = VarE 'topDownM_ `AppE` VarE tokenName `AppE` VarE funName `AppE` VarE n
-        mapArgRep (Nothing, n) = VarE n
+        mapArgRep (Nothing, n) = VarE 'return `AppE` VarE n
 
 
 -- * descend
