@@ -2,6 +2,7 @@
 module Data.Generics.ClassyPlate.TH (makeClassyPlate) where
 
 import Data.Maybe
+import Data.Either
 import Control.Monad
 import Control.Applicative
 
@@ -12,8 +13,10 @@ import Data.Generics.ClassyPlate.TypePrune
 
 -- TODO: make the definitions inlineable, and try speed gains by inlining
 
+type PrimitiveMarkers = [Either (Name,Integer) Name]
+
 -- | Creates ClassyPlate instances for a datatype. Can specify which fields should not be traversed.
-makeClassyPlate :: [Name] -> Name -> Q [Dec]
+makeClassyPlate :: PrimitiveMarkers -> Name -> Q [Dec]
 makeClassyPlate primitives dataType 
   = do inf <- reify dataType
        case inf of (TyConI (DataD _ name tvs _ cons _)) -> createClassyPlate name tvs cons
@@ -45,11 +48,13 @@ makeAutoCPForDataType name headType tvs cons
                           (generateAutoDefs clsVar headType name cons)
 
 -- | Creates an @IgnoredFields@ type instance according to the ignored fields specified
-makeIgnoredFieldsTF :: Type -> [Name] -> Dec
+makeIgnoredFieldsTF :: Type -> PrimitiveMarkers -> Dec
 makeIgnoredFieldsTF typ ignored 
   = TySynInstD ''IgnoredFields (TySynEqn [typ] (foldr typeListCons PromotedNilT ignored))
-  where typeListCons :: Name -> Type -> Type
-        typeListCons n = ((PromotedConsT `AppT` (LitT $ StrTyLit $ nameBase n)) `AppT`)
+  where typeListCons :: Either (Name, Integer) Name -> Type -> Type
+        typeListCons (Right fld) = ((PromotedConsT `AppT` (PromotedT 'Right `AppT` (LitT $ StrTyLit $ nameBase fld))) `AppT`)
+        typeListCons (Left (cons, n)) = ((PromotedConsT `AppT` (PromotedT 'Left `AppT` tupType)) `AppT`)
+          where tupType = PromotedTupleT 2 `AppT` (LitT $ StrTyLit $ nameBase cons) `AppT` (LitT $ NumTyLit $ fromIntegral n)
 
 generateCtx :: Name -> Type -> [ConRep] -> Cxt
 generateCtx clsVar selfType cons 
@@ -280,9 +285,16 @@ getTVName (KindedTV n _) = n
 type ConRep = (Name, [Maybe Type])
 
 -- | Extracts the necessary information from a constructor.
-getConRep :: [Name] -> Con -> ConRep
-getConRep primitives (NormalC n args) = (n, map (Just . snd) args)
-getConRep primitives (RecC n args) = (n, map (\(fldN,_,t) -> if fldN `elem` primitives then Nothing else Just t) args)
-getConRep primitives (InfixC (_,t1) n (_,t2)) = (n, [Just t1, Just t2])
+getConRep :: PrimitiveMarkers -> Con -> ConRep
+getConRep primitives (NormalC n args) 
+  = (n, map (\(i,c) -> if (n,i) `elem` lefts primitives then Nothing else Just (snd c)) (zip [0..] args))
+getConRep primitives (RecC n args) 
+  = (n, map (\(i, (fldN,_,t)) -> if fldN `elem` rights primitives || (n,i) `elem` lefts primitives 
+                                   then Nothing else Just t) 
+          $ zip [0..] args)
+getConRep primitives (InfixC (_,t1) n (_,t2)) 
+  = (n, [ if (n,0) `elem` lefts primitives then Nothing else Just t1
+        , if (n,1) `elem` lefts primitives then Nothing else Just t2
+        ])
 getConRep primitives (ForallC _ _ c) = getConRep primitives c
 getConRep _ _ = error "GADTs are not supported"

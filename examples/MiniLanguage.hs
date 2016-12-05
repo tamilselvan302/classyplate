@@ -56,6 +56,7 @@ instance Show (elem dom stage) => Show (Ann elem dom stage) where
 
 data Expr dom stage = Add (Ann Expr dom stage) (Ann Expr dom stage)
                     | Var (Ann Name dom stage)
+                    | Lit Integer
    deriving (Show, Generic)
 
 data Name dom stage = Name 

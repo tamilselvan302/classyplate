@@ -17,11 +17,14 @@ import qualified GHC.Generics as GG
 import Data.Data (Data)
 import Control.Parallel.Strategies
 
+import qualified Language.Haskell.TH as TH
 import Language.Haskell.TH (pprint, runIO)
 import Data.Type.Bool
 import Data.Type.List hiding (Distinct)
 
 import Data.Generics.ClassyPlate
+import Data.Generics.ClassyPlate.TH
+import Data.Generics.ClassyPlate.Core
 import MiniLanguage
 
 testExpr :: Ann Expr Dom RangeStage
@@ -45,11 +48,12 @@ type family TransformAppSelector x where
   TransformAppSelector (Ann e dom stage) = True
   TransformAppSelector x = False
 
-test = classyTraverse @Transform trf $ testExpr
+test = bottomUp @Transform trf $ testExpr
 test2 = smartTraverse @Transform trf $ testExpr
 
-makeClassyPlate [ '_annotation ] ''Ann
-makeClassyPlate [] ''Expr
+makeClassyPlate [ Right '_annotation ] ''Ann
+
+makeClassyPlate [ Left ('Lit ,0) ] ''Expr
 makeClassyPlate [] ''Name
 
 -- $( do pl <- makeClassyPlate [ '_annotation ] ''Ann
