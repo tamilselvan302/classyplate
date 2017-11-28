@@ -10,8 +10,23 @@ module Data.Generics.ClassyPlate.TypePrune (ClassIgnoresSubtree, AppSelector, Ap
 import GHC.Exts (Constraint)
 import GHC.Generics
 import Data.Type.Bool
-import Data.Type.List
 import GHC.TypeLits (Symbol, Nat)
+
+type family Union xs ys where
+  Union '[] ys = ys
+  Union (x ': xs) ys = Insert x (Union xs ys)
+
+type family Find x ys where
+  Find x '[]       = 'False
+  Find x (x ': ys) = 'True
+  Find x (y ': ys) = Find x ys
+
+type family Insert a xs where
+  Insert a '[]       = (a ': '[])
+  Insert a (a ': xs) = (a ': xs)
+  Insert a (x ': xs) = x ': (Insert a xs)
+
+--------------------------------
 
 -- | This type decides if the subtree of an element cannot contain an element that is transformed.
 type family ClassIgnoresSubtree (cls :: * -> Constraint) (typ :: *) :: Bool where
