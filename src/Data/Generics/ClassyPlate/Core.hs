@@ -51,25 +51,17 @@ class App (flag :: Bool) c b where
   appTDM :: Monad m => FlagToken flag -> ClsToken c -> (forall a . (ClassyPlate c a, c a) => a -> m a) -> (b -> m b) -> b -> m b
 
 instance (ClassyPlate c b, c b) => App 'True c b where
-  {-# INLINE app #-}
   app _ _ f a = f a
-  {-# INLINE appM #-}
   appM _ _ f a = f a
 
-  {-# INLINE appTD #-}
   appTD _ _ f _ a = f a
-  {-# INLINE appTDM #-}
   appTDM _ _ f _ a = f a
 
 instance App 'False c b where
-  {-# INLINE app #-}
   app _ _ _ a = a
-  {-# INLINE appM #-}
   appM _ _ _ a = return a
 
-  {-# INLINE appTD #-}
   appTD _ _ _ d a = d a
-  {-# INLINE appTDM #-}
   appTDM _ _ _ d a = d a
 
 -- | A class for traversals that use a polymorphic function to visit all applicable elements.
@@ -91,6 +83,4 @@ class (GoodOperationForAuto c b) => SmartClassyPlate c (sel :: Bool) b where
 
 instance (GoodOperationForAuto c b) => SmartClassyPlate c True b where
   smartTraverse_ _ t f a = app (undefined :: FlagToken (AppSelector c b)) t f a
-  {-# INLINE smartTraverse_ #-}
   smartTraverseM_ _ t f a = appM (undefined :: FlagToken (AppSelector c b)) t f a
-  {-# INLINE smartTraverseM_ #-}
