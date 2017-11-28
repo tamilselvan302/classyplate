@@ -12,7 +12,6 @@ import Control.Monad
 import Control.Parallel.Strategies
 
 import Data.Type.Bool
-import Data.Type.List hiding (Distinct)
 
 import Data.Generics.ClassyPlate
 import Data.Generics.ClassyPlate.Generate
