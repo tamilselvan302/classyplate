@@ -15,9 +15,13 @@ import Data.Generics.ClassyPlate.TypePrune
 
 type PrimitiveMarkers = [Either (Name,Integer) Name]
 
+data ClassyPlateConfig = MakeAll | OnlyDirect
+
+makeClassyPlate = makeClassyPlateConfig MakeAll
+
 -- | Creates ClassyPlate instances for a datatype. Can specify which fields should not be traversed.
-makeClassyPlate :: PrimitiveMarkers -> Name -> Q [Dec]
-makeClassyPlate primitives dataType 
+makeClassyPlateConfig :: ClassyPlateConfig -> PrimitiveMarkers -> Name -> Q [Dec]
+makeClassyPlateConfig config primitives dataType 
   = do inf <- reify dataType
        case inf of (TyConI (DataD _ name tvs _ cons _)) -> createClassyPlate name tvs cons
                    (TyConI (NewtypeD _ name tvs _ con _)) -> createClassyPlate name tvs [con]
@@ -25,9 +29,9 @@ makeClassyPlate primitives dataType
   where createClassyPlate name tvs cons 
           = let headType = foldl AppT (ConT name) (map (VarT . getTVName) tvs)
              in return $ [ makeNormalCPForDataType name headType tvs (map (getConRep primitives) cons)
-                         , makeAutoCPForDataType name headType tvs (map (getConRep primitives) cons)
                          , makeIgnoredFieldsTF headType primitives
-                         ]
+                         ] ++ case config of MakeAll -> [ makeAutoCPForDataType name headType tvs (map (getConRep primitives) cons) ]
+                                             _       -> []
 
 makeNormalCPForDataType :: Name -> Type -> [TyVarBndr] -> [ConRep] -> Dec
 makeNormalCPForDataType name headType tvs cons
