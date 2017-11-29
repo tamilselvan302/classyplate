@@ -1,5 +1,5 @@
 name:                classyplate
-version:             0.3.0.0
+version:             0.3.0.1
 synopsis:            Fuseable type-class based generics
 -- description:         
 license:             BSD3
@@ -31,6 +31,3 @@ benchmark measure
   other-modules:    AutoUni, DirectUni, Example, Generate
   build-depends:    base, criterion, classyplate, parallel, uniplate
   ghc-options:      -O2
-                    -- -fmax-simplifier-iterations=10
-                    -- -fdicts-cheap
-                    -- -fspec-constr-count=6
