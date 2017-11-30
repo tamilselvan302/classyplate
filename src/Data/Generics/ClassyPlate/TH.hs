@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskellQuotes #-} 
-module Data.Generics.ClassyPlate.TH (makeClassyPlate) where
+module Data.Generics.ClassyPlate.TH (makeClassyPlate, makeClassyPlateConfig, ClassyPlateConfig(..)) where
 
 import Data.Maybe
 import Data.Either
