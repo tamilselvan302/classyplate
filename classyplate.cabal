@@ -1,5 +1,5 @@
 name:                classyplate
-version:             0.3.0.1
+version:             0.3.0.2
 synopsis:            Fuseable type-class based generics
 description:         Defining generics that can be used efficiently on heterogenous data structures 
   like syntax trees. Can access elements of multiple types at a single traversal. Non-invasive method
