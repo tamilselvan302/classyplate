@@ -13,7 +13,7 @@
            , DeriveGeneric
            , DeriveDataTypeable
            , TypeOperators
-           , PolyKinds 
+           , PolyKinds
            #-}
 module Data.Generics.ClassyPlate.Core
   ( -- public functions and classes
@@ -24,14 +24,11 @@ module Data.Generics.ClassyPlate.Core
 
   , app, appM, appTD, appTDM
   , GoodOperationFor, GoodOperationForAuto, FlagToken
-  , ClsToken, FlagToken
+  , ClsToken
   ) where
 
 import GHC.Exts
-import Data.Maybe
-import Control.Monad
 import GHC.Generics (Generic)
-import Data.Data (Data)
 
 import Data.Generics.ClassyPlate.TypePrune
 
@@ -75,7 +72,7 @@ class GoodOperationFor c b => ClassyPlate c b where
   topDown_ :: ClsToken c -> (forall a . (ClassyPlate c a, c a) => a -> a) -> b -> b
   topDownM_ :: Monad m => ClsToken c -> (forall a . (ClassyPlate c a, c a) => a -> m a) -> b -> m b
 
--- | A class for traversals that use a polymorphic function to visit all applicable elements but only visit the 
+-- | A class for traversals that use a polymorphic function to visit all applicable elements but only visit the
 -- parts where the applicable elements could be found.
 class (GoodOperationForAuto c b) => SmartClassyPlate c (sel :: Bool) b where
   smartTraverse_ :: FlagToken sel -> ClsToken c -> (forall a . (ClassyPlate c a, c a) => a -> a) -> b -> b
