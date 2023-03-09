@@ -27,7 +27,6 @@ makeClassyPlateConfig config primitives dataType
   where createClassyPlate name tvs cons
           = let headType = foldl AppT (ConT name) (map (VarT . getTVName) tvs)
              in return $ [ makeNormalCPForDataType name headType tvs (map (getConRep primitives) cons)
-                         , makeIgnoredFieldsTF headType primitives
                          ] ++ case config of MakeAll -> [ makeAutoCPForDataType name headType tvs (map (getConRep primitives) cons) ]
                                              _       -> []
 
@@ -52,7 +51,7 @@ makeAutoCPForDataType name headType _ cons
 -- | Creates an @IgnoredFields@ type instance according to the ignored fields specified
 makeIgnoredFieldsTF :: Type -> PrimitiveMarkers -> Dec
 makeIgnoredFieldsTF typ ignored
-  = TySynInstD (TySynEqn (Just [PlainTV ''IgnoredFields]) typ (foldr typeListCons PromotedNilT ignored))
+  = TySynInstD (TySynEqn (Just [PlainTV ''IgnoredFields, KindedTV ''IgnoredFields typ]) typ (foldr typeListCons PromotedNilT ignored))
   where typeListCons :: Either (Name, Integer) Name -> Type -> Type
         typeListCons (Right fld) = ((PromotedConsT `AppT` (PromotedT 'Right `AppT` (LitT $ StrTyLit $ nameBase fld))) `AppT`)
         typeListCons (Left (cons, n)) = ((PromotedConsT `AppT` (PromotedT 'Left `AppT` tupType)) `AppT`)
