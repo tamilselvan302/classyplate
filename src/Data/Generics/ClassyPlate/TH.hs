@@ -8,6 +8,7 @@ import Language.Haskell.TH
 
 import Data.Generics.ClassyPlate.Core
 import Data.Generics.ClassyPlate.TypePrune
+-- import Language.Haskell.TH.Datatype.TyVarBndr
 
 -- TODO: make the definitions inlineable, and try speed gains by inlining
 
@@ -30,7 +31,7 @@ makeClassyPlateConfig config primitives dataType
                          ] ++ case config of MakeAll -> [ makeAutoCPForDataType name headType tvs (map (getConRep primitives) cons) ]
                                              _       -> []
 
-makeNormalCPForDataType :: Name -> Type -> [TyVarBndr] -> [ConRep] -> Dec
+makeNormalCPForDataType :: Name -> Type -> [TyVarBndr ()] -> [ConRep] -> Dec
 makeNormalCPForDataType name headType _ cons
   = let clsVar = mkName "c"
      in InstanceD Nothing (generateCtx clsVar headType cons)
@@ -38,7 +39,7 @@ makeNormalCPForDataType name headType _ cons
                           (generateDefs clsVar headType name cons)
 
 -- | Creates the @ClassyPlate@
-makeAutoCPForDataType :: Name -> Type -> [TyVarBndr] -> [ConRep] -> Dec
+makeAutoCPForDataType :: Name -> Type -> [TyVarBndr ()] -> [ConRep] -> Dec
 makeAutoCPForDataType name headType _ cons
   = let clsVar = mkName "c"
      in InstanceD Nothing (generateAutoCtx clsVar headType cons)
@@ -51,7 +52,7 @@ makeAutoCPForDataType name headType _ cons
 -- | Creates an @IgnoredFields@ type instance according to the ignored fields specified
 makeIgnoredFieldsTF :: Type -> PrimitiveMarkers -> Dec
 makeIgnoredFieldsTF typ ignored
-  = TySynInstD (TySynEqn (Just [PlainTV ''IgnoredFields, KindedTV ''IgnoredFields typ]) typ (foldr typeListCons PromotedNilT ignored))
+  = TySynInstD (TySynEqn (Just [PlainTV ''IgnoredFields (), KindedTV ''IgnoredFields () typ]) typ (foldr typeListCons PromotedNilT ignored))
   where typeListCons :: Either (Name, Integer) Name -> Type -> Type
         typeListCons (Right fld) = ((PromotedConsT `AppT` (PromotedT 'Right `AppT` (LitT $ StrTyLit $ nameBase fld))) `AppT`)
         typeListCons (Left (cons, n)) = ((PromotedConsT `AppT` (PromotedT 'Left `AppT` tupType)) `AppT`)
@@ -93,7 +94,7 @@ generateAutoDefs clsVar headType tyName cons =
 -- | Creates the clause for the @classyTraverse_@ function for one constructor: @classyTraverse_ t f (Add e1 e2) = app (undefined :: FlagToken (AppSelector c (Expr dom stage))) t f $ Add (classyTraverse_ t f e1) (classyTraverse_ t f e2)@
 generateAppClause :: Name -> Type -> Name -> ConRep -> Clause
 generateAppClause clsVar headType _ (conName, args)
-  = Clause [VarP tokenName, VarP funName, ConP conName (map VarP $ take (length args) argNames)]
+  = Clause [VarP tokenName, VarP funName, ConP conName [headType] (map VarP $ take (length args) argNames)]
       (NormalB (generateAppExpr clsVar headType tokenName funName
                  `AppE` generateRecombineExpr conName tokenName funName (zip (map isJust args) argNames))) []
   where argNames = map (mkName . ("a"++) . show) [0..]
@@ -116,7 +117,7 @@ generateRecombineExpr conName tokenName funName args
 -- | Creates the clause for the @classyTraverseM_@ function for one constructor: @classyTraverseM_ t f (Ann ann e) = appM (undefined :: FlagToken (AppSelector c (Ann e dom stage))) t f =<< (Ann <$> return ann <*> applyM t f e)@
 generateAppMClause :: Name -> Type -> Name -> ConRep -> Clause
 generateAppMClause clsVar headType _ (conName, args)
-  = Clause [VarP tokenName, VarP funName, ConP conName (map VarP $ take (length args) argNames)]
+  = Clause [VarP tokenName, VarP funName, ConP conName [headType] (map VarP $ take (length args) argNames)]
       (NormalB (InfixE (Just $ generateAppMExpr clsVar headType tokenName funName)
                        (VarE '(=<<))
                        (Just $ generateRecombineMExpr conName tokenName funName (zip (map isJust args) argNames)) )) []
@@ -156,7 +157,7 @@ generateTopDownExpr clsVar headType tokenName funName elemName cons
 
 createTopDownMatch :: Name -> Name -> ConRep -> Match
 createTopDownMatch tokenName funName (conName, args)
-  = Match (ConP conName (map VarP formalArgs))
+  = Match (ConP conName [] (map VarP formalArgs))
           (NormalB $ foldl AppE (ConE conName) (map mapArgRep $ zip args formalArgs)) []
   where argNames = map (mkName . ("a"++) . show) [0..]
         formalArgs = take (length args) argNames
@@ -175,7 +176,7 @@ generateTopDownMExpr clsVar headType tokenName funName elemName cons
 
 generateTopDownMMatch :: Name -> Name -> ConRep -> Match
 generateTopDownMMatch tokenName funName (conName, args)
-  = Match (ConP conName (map VarP argNames))
+  = Match (ConP conName [] (map VarP argNames))
           (NormalB $ case formalArgs of
                        [] -> VarE 'return `AppE` ConE conName
                        fst:rest -> foldl (\base -> InfixE (Just base) (VarE '(<*>)) . Just)
@@ -193,7 +194,7 @@ generateTopDownMMatch tokenName funName (conName, args)
 -- | Creates the clause for the @descend_@ function for one constructor
 generateDescendAppClause :: Name -> Type -> Name -> ConRep -> Clause
 generateDescendAppClause clsVar _ _ (conName, args)
-  = Clause [VarP tokenName, VarP funName, ConP conName (map VarP $ take (length args) argNames)]
+  = Clause [VarP tokenName, VarP funName, ConP conName [] (map VarP $ take (length args) argNames)]
       (NormalB (generateDescendRecombineExpr clsVar conName tokenName funName (zip args argNames))) []
   where argNames = map (mkName . ("a"++) . show) [0..]
         tokenName = mkName "t"
@@ -212,7 +213,7 @@ generateDescendRecombineExpr clsVar conName tokenName funName args
 -- | Creates the clause for the @descendM_@ function for one constructor
 generateDescendMAppClause :: Name -> Type -> Name -> ConRep -> Clause
 generateDescendMAppClause clsVar _ _ (conName, args)
-  = Clause [VarP tokenName, VarP funName, ConP conName (map VarP $ take (length args) argNames)]
+  = Clause [VarP tokenName, VarP funName, ConP conName [] (map VarP $ take (length args) argNames)]
       (NormalB (generateDescendMRecombineExpr clsVar conName tokenName funName (zip args argNames))) []
   where argNames = map (mkName . ("a"++) . show) [0..]
         tokenName = mkName "t"
@@ -235,7 +236,7 @@ generateDescendMRecombineExpr clsVar conName tokenName funName (fst:args)
 -- | Creates the clause for the @smartTraverse_@ function for one constructor
 generateAppAutoClause :: Name -> Type -> Name -> ConRep -> Clause
 generateAppAutoClause clsVar headType _ (conName, args)
-  = Clause [WildP, VarP tokenName, VarP funName, ConP conName (map VarP $ take (length args) argNames)]
+  = Clause [WildP, VarP tokenName, VarP funName, ConP conName [headType] (map VarP $ take (length args) argNames)]
       (NormalB (generateAppExpr clsVar headType tokenName funName
                  `AppE` generateAutoRecombineExpr clsVar conName tokenName funName (zip args argNames))) []
   where argNames = map (mkName . ("a"++) . show) [0..]
@@ -256,7 +257,7 @@ generateAutoRecombineExpr clsVar conName tokenName funName args
 -- | Creates the clause for the @smartTraverseM_@ function for one constructor
 generateAppAutoMClause :: Name -> Type -> Name -> ConRep -> Clause
 generateAppAutoMClause clsVar headType _ (conName, args)
-  = Clause [WildP, VarP tokenName, VarP funName, ConP conName (map VarP $ take (length args) argNames)]
+  = Clause [WildP, VarP tokenName, VarP funName, ConP conName [headType] (map VarP $ take (length args) argNames)]
       (NormalB (InfixE (Just $ generateAppMExpr clsVar headType tokenName funName)
                        (VarE '(=<<))
                        (Just $ generateAutoRecombineMExpr clsVar conName tokenName funName (zip args argNames)) )) []
@@ -278,9 +279,9 @@ generateAutoRecombineMExpr clsVar conName tokenName funName (fst:args)
         mapArgRep (Nothing, n) = VarE 'return `AppE` VarE n
 
 -- | Gets the name of a type variable
-getTVName :: TyVarBndr -> Name
-getTVName (PlainTV n) = n
-getTVName (KindedTV n _) = n
+getTVName :: TyVarBndr a -> Name
+getTVName (PlainTV n _) = n
+getTVName (KindedTV n _ _) = n
 
 -- | The information we need from a constructor.
 type ConRep = (Name, [Maybe Type])
