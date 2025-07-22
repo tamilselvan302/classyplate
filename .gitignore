@@ -4,3 +4,7 @@
 .stack-work/**
 dist/**
 dist*
+.DS_Store
+.DS_Store/
+.direnv
+.direnv/

@@ -23,7 +23,7 @@
         ...
       }: {
         haskellProjects.default = {
-          basePackages = pkgs.haskell.packages.ghc92;
+          basePackages = pkgs.haskell.packages.ghc924;
           packages = {
 
           };
